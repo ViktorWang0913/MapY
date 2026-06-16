@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.vite/
+
+# Tauri / Rust build output
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Download artifacts and installers
+public/downloads/
+*.msi
+*.exe
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Local logs
+*.log
+.vite-dev*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor and assistant-local files
+.vscode/
+.idea/
+.claude/
+.codex/
+.cursor/
+.agents/
+.impeccable/
+
+# Website deployment files not included in the app source release
+deployment/
+DEPLOYMENT.md
+public/_redirects
+
+# OS files
+.DS_Store
+Thumbs.db
