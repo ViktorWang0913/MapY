@@ -19,7 +19,7 @@ import {
   Workflow
 } from 'lucide-react';
 import type { ChangeEvent, ComponentType, FormEvent } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getAllNodes, nodeMatchesSearch, normalizeDocument, typeLabels } from '../model/document';
 import { getAnchorWorldPoint, getObjectAbsoluteTransform } from '../model/geometry';
 import type { MapYDocument } from '../model/types';
@@ -44,16 +44,26 @@ interface MenuItemProps {
   children: string;
   icon: ComponentType<{ size?: number }>;
   onClick: () => void;
+  onDone?: () => void;
 }
 
-function MenuItem({ children, icon: Icon, onClick }: MenuItemProps) {
+function MenuItem({ children, icon: Icon, onClick, onDone }: MenuItemProps) {
   return (
-    <button className="menu-item" onClick={onClick} type="button">
+    <button
+      className="menu-item"
+      onClick={() => {
+        onClick();
+        onDone?.();
+      }}
+      type="button"
+    >
       <Icon size={16} />
       <span>{children}</span>
     </button>
   );
 }
+
+type TopMenuGroup = 'file' | 'edit' | 'help';
 
 const exportPresets = [
   { label: '网页预览', width: 1280, height: 720 },
@@ -390,6 +400,8 @@ function InfoDialog({ kind, onClose }: { kind?: 'contact' | 'help'; onClose: () 
 export function TopMenu() {
   const [exportOpen, setExportOpen] = useState(false);
   const [infoDialog, setInfoDialog] = useState<'contact' | 'help'>();
+  const [openMenu, setOpenMenu] = useState<TopMenuGroup | null>(null);
+  const menuBarRef = useRef<HTMLElement>(null);
   const document = useEditorStore((state) => state.document);
   const documentName = document.name;
   const newDocument = useEditorStore((state) => state.newDocument);
@@ -416,6 +428,35 @@ export function TopMenu() {
         .filter((node) => nodeMatchesSearch(document, node, searchQuery))
         .slice(0, 8)
     : [];
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      if (!menuBarRef.current?.contains(event.target as Node)) {
+        setOpenMenu(null);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setOpenMenu(null);
+      }
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  function toggleMenu(menu: TopMenuGroup) {
+    setOpenMenu((current) => (current === menu ? null : menu));
+  }
+
+  function closeMenu() {
+    setOpenMenu(null);
+  }
 
   async function handleOpen() {
     try {
@@ -472,71 +513,93 @@ export function TopMenu() {
         <img alt="MapY" className="brand-logo" src={mapyLogo} />
         <span className="brand-name">MapY</span>
       </div>
-      <nav className="menu-bar" aria-label="顶部菜单栏">
-        <div className="menu-group">
-          <button className="menu-trigger" type="button">
+      <nav className="menu-bar" aria-label="顶部菜单栏" ref={menuBarRef}>
+        <div className={`menu-group ${openMenu === 'file' ? 'open' : ''}`}>
+          <button
+            aria-expanded={openMenu === 'file'}
+            className="menu-trigger"
+            onClick={() => toggleMenu('file')}
+            type="button"
+          >
             文件
           </button>
           <div className="menu-dropdown">
-            <MenuItem icon={FilePlus} onClick={() => newDocument()}>
+            <MenuItem icon={FilePlus} onClick={() => newDocument()} onDone={closeMenu}>
               新建文件
             </MenuItem>
-            <MenuItem icon={FolderOpen} onClick={() => void handleOpen()}>
+            <MenuItem icon={FolderOpen} onClick={() => void handleOpen()} onDone={closeMenu}>
               打开文件
             </MenuItem>
-            <MenuItem icon={Save} onClick={() => void handleSave()}>
+            <MenuItem icon={Save} onClick={() => void handleSave()} onDone={closeMenu}>
               保存文件
             </MenuItem>
-            <MenuItem icon={Download} onClick={handleSaveAs}>
+            <MenuItem icon={Download} onClick={handleSaveAs} onDone={closeMenu}>
               另存为文件
             </MenuItem>
-            <MenuItem icon={FileX2} onClick={() => closeDocumentTab()}>
+            <MenuItem icon={FileX2} onClick={() => closeDocumentTab()} onDone={closeMenu}>
               删除文件
             </MenuItem>
           </div>
         </div>
-        <div className="menu-group">
-          <button className="menu-trigger" type="button">
+        <div className={`menu-group ${openMenu === 'edit' ? 'open' : ''}`}>
+          <button
+            aria-expanded={openMenu === 'edit'}
+            className="menu-trigger"
+            onClick={() => toggleMenu('edit')}
+            type="button"
+          >
             编辑
           </button>
           <div className="menu-dropdown">
-            <MenuItem icon={Undo2} onClick={undo}>
+            <MenuItem icon={Undo2} onClick={undo} onDone={closeMenu}>
               撤销
             </MenuItem>
-            <MenuItem icon={Redo2} onClick={redo}>
+            <MenuItem icon={Redo2} onClick={redo} onDone={closeMenu}>
               重做
             </MenuItem>
-            <MenuItem icon={Copy} onClick={copySelected}>
+            <MenuItem icon={Copy} onClick={copySelected} onDone={closeMenu}>
               复制
             </MenuItem>
-            <MenuItem icon={Scissors} onClick={cutSelected}>
+            <MenuItem icon={Scissors} onClick={cutSelected} onDone={closeMenu}>
               剪切
             </MenuItem>
-            <MenuItem icon={Clipboard} onClick={pasteClipboard}>
+            <MenuItem icon={Clipboard} onClick={pasteClipboard} onDone={closeMenu}>
               粘贴
             </MenuItem>
-            <MenuItem icon={Trash2} onClick={deleteSelected}>
+            <MenuItem icon={Trash2} onClick={deleteSelected} onDone={closeMenu}>
               删除
             </MenuItem>
-            <MenuItem icon={MessageSquare} onClick={addAnnotation}>
+            <MenuItem icon={MessageSquare} onClick={addAnnotation} onDone={closeMenu}>
               注释
             </MenuItem>
           </div>
         </div>
         <div className="menu-group">
-          <button className="menu-trigger" onClick={() => setExportOpen(true)} type="button">
+          <button
+            className="menu-trigger"
+            onClick={() => {
+              closeMenu();
+              setExportOpen(true);
+            }}
+            type="button"
+          >
             导出
           </button>
         </div>
-        <div className="menu-group">
-          <button className="menu-trigger" type="button">
+        <div className={`menu-group ${openMenu === 'help' ? 'open' : ''}`}>
+          <button
+            aria-expanded={openMenu === 'help'}
+            className="menu-trigger"
+            onClick={() => toggleMenu('help')}
+            type="button"
+          >
             帮助
           </button>
           <div className="menu-dropdown">
-            <MenuItem icon={Mail} onClick={() => setInfoDialog('contact')}>
+            <MenuItem icon={Mail} onClick={() => setInfoDialog('contact')} onDone={closeMenu}>
               联系我们
             </MenuItem>
-            <MenuItem icon={HelpCircle} onClick={() => setInfoDialog('help')}>
+            <MenuItem icon={HelpCircle} onClick={() => setInfoDialog('help')} onDone={closeMenu}>
               帮助文档
             </MenuItem>
           </div>

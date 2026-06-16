@@ -104,7 +104,8 @@ button {
 }
 
 .menu-group:focus-within .menu-trigger,
-.menu-group:hover .menu-trigger {
+.menu-group:hover .menu-trigger,
+.menu-group.open .menu-trigger {
   border-color: #293d57;
   background: #172235;
   color: #ffffff;
@@ -129,7 +130,8 @@ button {
 }
 
 .menu-group:focus-within .menu-dropdown,
-.menu-group:hover .menu-dropdown {
+.menu-group:hover .menu-dropdown,
+.menu-group.open .menu-dropdown {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
@@ -2106,4 +2108,48 @@ summary.identifier-palette-item::-webkit-details-marker {
   .document-tab {
     transition: none !important;
   }
+}
+
+/* App interaction guard: keep editor modals as centered windows. */
+.dialog-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 100 !important;
+  display: grid !important;
+  place-items: center !important;
+  align-items: center !important;
+  justify-items: center !important;
+  padding: 24px !important;
+  overflow: auto !important;
+  background: rgba(5, 10, 18, 0.68);
+}
+
+.dialog-backdrop > .creation-dialog,
+.dialog-backdrop > .node-property-dialog,
+.dialog-backdrop > .export-dialog,
+.dialog-backdrop > .info-dialog {
+  position: relative !important;
+  align-self: center !important;
+  justify-self: center !important;
+  max-width: calc(100vw - 48px) !important;
+  max-height: calc(100vh - 48px) !important;
+  margin: 0 !important;
+  overflow: auto !important;
+  transform: none !important;
+}
+
+.dialog-backdrop > .creation-dialog {
+  width: min(640px, calc(100vw - 48px)) !important;
+}
+
+.dialog-backdrop > .node-property-dialog {
+  width: min(720px, calc(100vw - 48px)) !important;
+}
+
+.dialog-backdrop > .export-dialog {
+  width: min(920px, calc(100vw - 48px)) !important;
+}
+
+.menu-dropdown {
+  z-index: 120;
 }
