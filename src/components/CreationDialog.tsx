@@ -1,5 +1,6 @@
 import { Plus, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { defaultColors, defaultShape, findNode, getIdentifierDefinition, shapeLabels, typeLabels } from '../model/document';
 import { getParentWorldOrigin } from '../model/geometry';
 import type { ElementType, ShapeKind } from '../model/types';
@@ -214,7 +215,7 @@ export function CreationDialog() {
     }
   }
 
-  return (
+  const dialog = (
     <div className="dialog-backdrop" role="presentation">
       <form className="creation-dialog" onSubmit={handleSubmit}>
         <header className="dialog-header">
@@ -406,4 +407,6 @@ export function CreationDialog() {
       </form>
     </div>
   );
+
+  return createPortal(dialog, window.document.body);
 }

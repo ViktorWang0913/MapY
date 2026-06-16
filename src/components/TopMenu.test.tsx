@@ -29,7 +29,7 @@ function resetEditor() {
 describe('TopMenu', () => {
   beforeEach(resetEditor);
 
-  it('opens a dropdown by click and closes it on outside pointer down', () => {
+  it('opens and closes a dropdown with repeated pointer presses', () => {
     render(<TopMenu />);
 
     const fileButton = screen.getByRole('button', { name: '文件' });
@@ -38,14 +38,31 @@ describe('TopMenu', () => {
     expect(fileButton).toHaveAttribute('aria-expanded', 'false');
     expect(fileGroup).not.toHaveClass('open');
 
-    fireEvent.click(fileButton);
+    fireEvent.pointerDown(fileButton);
 
     expect(fileButton).toHaveAttribute('aria-expanded', 'true');
     expect(fileGroup).toHaveClass('open');
 
-    fireEvent.pointerDown(document.body);
+    fireEvent.pointerDown(fileButton);
 
     expect(fileButton).toHaveAttribute('aria-expanded', 'false');
     expect(fileGroup).not.toHaveClass('open');
+  });
+
+  it('closes an open dropdown with Escape', () => {
+    render(<TopMenu />);
+
+    const editButton = screen.getByRole('button', { name: '编辑' });
+    const editGroup = editButton.closest('.menu-group');
+
+    fireEvent.pointerDown(editButton);
+
+    expect(editButton).toHaveAttribute('aria-expanded', 'true');
+    expect(editGroup).toHaveClass('open');
+
+    fireEvent.keyDown(editButton, { key: 'Escape' });
+
+    expect(editButton).toHaveAttribute('aria-expanded', 'false');
+    expect(editGroup).not.toHaveClass('open');
   });
 });

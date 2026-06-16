@@ -18,8 +18,9 @@ import {
   Undo2,
   Workflow
 } from 'lucide-react';
-import type { ChangeEvent, ComponentType, FormEvent } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ChangeEvent, ComponentType, FormEvent, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
+import { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getAllNodes, nodeMatchesSearch, normalizeDocument, typeLabels } from '../model/document';
 import { getAnchorWorldPoint, getObjectAbsoluteTransform } from '../model/geometry';
 import type { MapYDocument } from '../model/types';
@@ -222,7 +223,7 @@ function ExportDialog({
     return null;
   }
 
-  return (
+  const dialog = (
     <div className="dialog-backdrop" role="presentation">
       <section className="export-dialog" aria-label="导出地图">
         <div className="dialog-header">
@@ -285,6 +286,8 @@ function ExportDialog({
       </section>
     </div>
   );
+
+  return createPortal(dialog, window.document.body);
 }
 
 function InfoDialog({ kind, onClose }: { kind?: 'contact' | 'help'; onClose: () => void }) {
@@ -310,7 +313,7 @@ function InfoDialog({ kind, onClose }: { kind?: 'contact' | 'help'; onClose: () 
     window.location.href = `mailto:mapy_zstudio@163.com?subject=${encodeURIComponent(`MapY ${feedbackType}`)}&body=${encodeURIComponent(body)}`;
   }
 
-  return (
+  const dialog = (
     <div className="dialog-backdrop" role="presentation">
       <section className="creation-dialog info-dialog" aria-label={isContact ? '联系我们' : '帮助文档'}>
         <header className="dialog-header">
@@ -395,13 +398,14 @@ function InfoDialog({ kind, onClose }: { kind?: 'contact' | 'help'; onClose: () 
       </section>
     </div>
   );
+
+  return createPortal(dialog, window.document.body);
 }
 
 export function TopMenu() {
   const [exportOpen, setExportOpen] = useState(false);
   const [infoDialog, setInfoDialog] = useState<'contact' | 'help'>();
   const [openMenu, setOpenMenu] = useState<TopMenuGroup | null>(null);
-  const menuBarRef = useRef<HTMLElement>(null);
   const document = useEditorStore((state) => state.document);
   const documentName = document.name;
   const newDocument = useEditorStore((state) => state.newDocument);
@@ -429,33 +433,30 @@ export function TopMenu() {
         .slice(0, 8)
     : [];
 
-  useEffect(() => {
-    function handlePointerDown(event: PointerEvent) {
-      if (!menuBarRef.current?.contains(event.target as Node)) {
-        setOpenMenu(null);
-      }
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setOpenMenu(null);
-      }
-    }
-
-    window.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
-
   function toggleMenu(menu: TopMenuGroup) {
     setOpenMenu((current) => (current === menu ? null : menu));
   }
 
   function closeMenu() {
     setOpenMenu(null);
+  }
+
+  function handleMenuPointerDown(event: ReactPointerEvent<HTMLButtonElement>, menu: TopMenuGroup) {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleMenu(menu);
+  }
+
+  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>, menu: TopMenuGroup) {
+    if (event.key === 'Escape') {
+      closeMenu();
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      toggleMenu(menu);
+    }
   }
 
   async function handleOpen() {
@@ -513,12 +514,13 @@ export function TopMenu() {
         <img alt="MapY" className="brand-logo" src={mapyLogo} />
         <span className="brand-name">MapY</span>
       </div>
-      <nav className="menu-bar" aria-label="顶部菜单栏" ref={menuBarRef}>
+      <nav className="menu-bar" aria-label="顶部菜单栏">
         <div className={`menu-group ${openMenu === 'file' ? 'open' : ''}`}>
           <button
             aria-expanded={openMenu === 'file'}
             className="menu-trigger"
-            onClick={() => toggleMenu('file')}
+            onKeyDown={(event) => handleMenuKeyDown(event, 'file')}
+            onPointerDown={(event) => handleMenuPointerDown(event, 'file')}
             type="button"
           >
             文件
@@ -545,7 +547,8 @@ export function TopMenu() {
           <button
             aria-expanded={openMenu === 'edit'}
             className="menu-trigger"
-            onClick={() => toggleMenu('edit')}
+            onKeyDown={(event) => handleMenuKeyDown(event, 'edit')}
+            onPointerDown={(event) => handleMenuPointerDown(event, 'edit')}
             type="button"
           >
             编辑
@@ -590,7 +593,8 @@ export function TopMenu() {
           <button
             aria-expanded={openMenu === 'help'}
             className="menu-trigger"
-            onClick={() => toggleMenu('help')}
+            onKeyDown={(event) => handleMenuKeyDown(event, 'help')}
+            onPointerDown={(event) => handleMenuPointerDown(event, 'help')}
             type="button"
           >
             帮助

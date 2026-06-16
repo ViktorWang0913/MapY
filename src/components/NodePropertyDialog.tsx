@@ -1,4 +1,5 @@
 import { Plus, Trash2, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { findNode, getIdentifierDefinition, typeLabels } from '../model/document';
 import type { DoorSide, MapYDocument, MapYNode, Transform } from '../model/types';
 import { openAssetFile } from '../platformFiles';
@@ -96,7 +97,7 @@ export function NodePropertyDialog() {
     });
   }
 
-  return (
+  const dialog = (
     <div className="dialog-backdrop" onMouseDown={closeNodeInspector} role="presentation">
       <section className="node-property-dialog" aria-label="对象属性窗口" onMouseDown={(event) => event.stopPropagation()}>
         <div className="dialog-header">
@@ -244,4 +245,6 @@ export function NodePropertyDialog() {
       </section>
     </div>
   );
+
+  return createPortal(dialog, window.document.body);
 }

@@ -45,6 +45,7 @@ button {
 }
 
 .top-menu {
+  position: relative;
   z-index: 20;
   display: grid;
   grid-template-columns: 168px minmax(0, 1fr) auto;
@@ -80,6 +81,8 @@ button {
 }
 
 .menu-bar {
+  position: relative;
+  z-index: 21;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -91,6 +94,7 @@ button {
 .menu-group {
   position: relative;
   height: 100%;
+  overflow: visible;
 }
 
 .menu-trigger {
@@ -103,8 +107,6 @@ button {
   color: #c8d7eb;
 }
 
-.menu-group:focus-within .menu-trigger,
-.menu-group:hover .menu-trigger,
 .menu-group.open .menu-trigger {
   border-color: #293d57;
   background: #172235;
@@ -127,14 +129,14 @@ button {
   pointer-events: none;
   transform: translateY(-4px);
   transition: opacity 120ms ease, transform 120ms ease;
+  visibility: hidden;
 }
 
-.menu-group:focus-within .menu-dropdown,
-.menu-group:hover .menu-dropdown,
 .menu-group.open .menu-dropdown {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
+  visibility: visible;
 }
 
 .menu-item {
@@ -1922,6 +1924,7 @@ summary.identifier-palette-item::-webkit-details-marker {
 }
 
 .top-menu {
+  overflow: visible !important;
   border-bottom: 1px solid var(--app-line);
   color: var(--app-text);
 }
