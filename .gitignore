@@ -22,7 +22,6 @@ public/downloads/
 # Local environment files
 .env
 .env.*
-!.env.example
 
 # Local logs
 *.log

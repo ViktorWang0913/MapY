@@ -2,11 +2,9 @@
 
 MapY is a local-first 2D map and level planning app for Metroidvania-style games. It helps creators build maps from scenes, structure pixels, identifiers, and connections, then save the project as JSON or export images for review.
 
-This repository is the open source App codebase. The website and deployment workflow are not the focus of this release.
-
 ## Current Status
 
-MapY is in early development. The Windows build is shared for free use and feedback. Some workflows and file formats may still change before a stable release.
+MapY is in early development. The Windows build is shared for free use and feedback.
 
 Feedback email: `mapy_zstudio@163.com`
 
@@ -55,7 +53,7 @@ npm run dev
 Then open:
 
 ```text
-http://127.0.0.1:5173/editor
+http://127.0.0.1:5173/
 ```
 
 Run the Tauri desktop app in development mode:
