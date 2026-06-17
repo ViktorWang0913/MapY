@@ -18,7 +18,14 @@ import {
   Undo2,
   Workflow
 } from 'lucide-react';
-import type { ChangeEvent, ComponentType, FormEvent, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
+import type {
+  ChangeEvent,
+  ComponentType,
+  FormEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent
+} from 'react';
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getAllNodes, nodeMatchesSearch, normalizeDocument, typeLabels } from '../model/document';
@@ -26,6 +33,7 @@ import { getAnchorWorldPoint, getObjectAbsoluteTransform } from '../model/geomet
 import type { MapYDocument } from '../model/types';
 import { openJsonFile, saveJsonFile } from '../platformFiles';
 import { useEditorStore } from '../store/editorStore';
+import { useDraggableWindow } from '../hooks/useDraggableWindow';
 import mapyLogo from '../assets/mapy-logo.png';
 
 function requestImageExport(filename: string, width: number, height: number, mimeType: 'image/png' | 'image/jpeg') {
@@ -217,6 +225,7 @@ function ExportDialog({
 }) {
   const [format, setFormat] = useState<ExportMimeType>('image/png');
   const [presetIndex, setPresetIndex] = useState(1);
+  const draggableWindow = useDraggableWindow();
   const preset = exportPresets[presetIndex];
 
   if (!open) {
@@ -225,8 +234,13 @@ function ExportDialog({
 
   const dialog = (
     <div className="dialog-backdrop" role="presentation">
-      <section className="export-dialog" aria-label="导出地图">
-        <div className="dialog-header">
+      <section
+        className="export-dialog draggable-dialog"
+        aria-label="导出地图"
+        data-dragging={draggableWindow.isDragging || undefined}
+        style={draggableWindow.style}
+      >
+        <div className="dialog-header" {...draggableWindow.dragHandleProps}>
           <div>
             <div className="dialog-kicker">导出</div>
             <h2>{documentName || 'MapY'}</h2>
@@ -294,6 +308,7 @@ function InfoDialog({ kind, onClose }: { kind?: 'contact' | 'help'; onClose: () 
   const [feedbackType, setFeedbackType] = useState('使用问题');
   const [contact, setContact] = useState('');
   const [message, setMessage] = useState('');
+  const draggableWindow = useDraggableWindow();
 
   if (!kind) {
     return null;
@@ -315,8 +330,13 @@ function InfoDialog({ kind, onClose }: { kind?: 'contact' | 'help'; onClose: () 
 
   const dialog = (
     <div className="dialog-backdrop" role="presentation">
-      <section className="creation-dialog info-dialog" aria-label={isContact ? '联系我们' : '帮助文档'}>
-        <header className="dialog-header">
+      <section
+        className="creation-dialog info-dialog draggable-dialog"
+        aria-label={isContact ? '联系我们' : '帮助文档'}
+        data-dragging={draggableWindow.isDragging || undefined}
+        style={draggableWindow.style}
+      >
+        <header className="dialog-header" {...draggableWindow.dragHandleProps}>
           <div>
             <span className="dialog-kicker">{isContact ? '反馈' : '帮助'}</span>
             <h2>{isContact ? '联系我们' : 'MapY 帮助文档'}</h2>
@@ -443,19 +463,18 @@ export function TopMenu() {
 
   function handleMenuPointerDown(event: ReactPointerEvent<HTMLButtonElement>, menu: TopMenuGroup) {
     event.preventDefault();
-    event.stopPropagation();
     toggleMenu(menu);
   }
 
-  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>, menu: TopMenuGroup) {
+  function handleMenuClick(event: ReactMouseEvent<HTMLButtonElement>, menu: TopMenuGroup) {
+    if (event.detail === 0) {
+      toggleMenu(menu);
+    }
+  }
+
+  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
     if (event.key === 'Escape') {
       closeMenu();
-      return;
-    }
-
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      toggleMenu(menu);
     }
   }
 
@@ -519,7 +538,8 @@ export function TopMenu() {
           <button
             aria-expanded={openMenu === 'file'}
             className="menu-trigger"
-            onKeyDown={(event) => handleMenuKeyDown(event, 'file')}
+            onClick={(event) => handleMenuClick(event, 'file')}
+            onKeyDown={handleMenuKeyDown}
             onPointerDown={(event) => handleMenuPointerDown(event, 'file')}
             type="button"
           >
@@ -547,7 +567,8 @@ export function TopMenu() {
           <button
             aria-expanded={openMenu === 'edit'}
             className="menu-trigger"
-            onKeyDown={(event) => handleMenuKeyDown(event, 'edit')}
+            onClick={(event) => handleMenuClick(event, 'edit')}
+            onKeyDown={handleMenuKeyDown}
             onPointerDown={(event) => handleMenuPointerDown(event, 'edit')}
             type="button"
           >
@@ -593,7 +614,8 @@ export function TopMenu() {
           <button
             aria-expanded={openMenu === 'help'}
             className="menu-trigger"
-            onKeyDown={(event) => handleMenuKeyDown(event, 'help')}
+            onClick={(event) => handleMenuClick(event, 'help')}
+            onKeyDown={handleMenuKeyDown}
             onPointerDown={(event) => handleMenuPointerDown(event, 'help')}
             type="button"
           >

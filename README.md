@@ -1,70 +1,21 @@
 # MapY
 
-MapY is a local-first 2D map planning app for Metroidvania-style games.
+类银河恶魔城 2D 地图规划工具。
 
-## Features
+## 下载
 
-- Scene-based map planning
-- Structure pixel editing
-- Reusable identifiers
-- World connections
-- Local JSON open/save
-- Image export
-- Windows desktop build
+Windows：[MapY_0.1.0_x64-setup.exe](public/downloads/MapY_0.1.0_x64-setup.exe)（Win10/11 x64，未签名）
 
-## Stack
-
-Vite, React, TypeScript, Tauri v2, Konva, Zustand, Vitest.
-
-## Requirements
-
-- Node.js 20+
-- Rust stable
-- Windows 10/11 x64 for desktop packaging
-- Microsoft C++ Build Tools and WebView2 runtime
-
-## Development
+## 开发
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open:
+桌面开发：`npm run tauri:dev`  
+打包安装包：`npm run tauri:build`
 
-```text
-http://127.0.0.1:5173/editor
-```
+反馈：mapy_zstudio@163.com
 
-Desktop dev:
-
-```bash
-npm run tauri:dev
-```
-
-Checks:
-
-```bash
-npm test -- --run
-npm run build
-```
-
-Windows installer:
-
-```bash
-npm run tauri:build
-```
-
-Output:
-
-```text
-src-tauri/target/release/bundle/nsis/
-```
-
-## Feedback
-
-`mapy_zstudio@163.com`
-
-## License
-
-MIT
+MIT License

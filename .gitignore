@@ -10,14 +10,15 @@ build/
 src-tauri/target/
 src-tauri/gen/schemas/
 
-# Download artifacts and installers
-public/downloads/
+# Installers outside the release folder
 *.msi
-*.exe
 *.dmg
 *.AppImage
 *.deb
 *.rpm
+*.exe
+!public/downloads/
+!public/downloads/**
 
 # Local environment files
 .env
@@ -40,7 +41,7 @@ pnpm-debug.log*
 .agents/
 .impeccable/
 
-# Website deployment files not included in the app source release
+# Website deployment files
 deployment/
 DEPLOYMENT.md
 public/_redirects

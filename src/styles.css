@@ -1925,8 +1925,14 @@ summary.identifier-palette-item::-webkit-details-marker {
 
 .top-menu {
   overflow: visible !important;
+  z-index: 300 !important;
   border-bottom: 1px solid var(--app-line);
   color: var(--app-text);
+}
+
+.editor-shell {
+  position: relative;
+  z-index: 1;
 }
 
 .top-menu button,
@@ -2113,11 +2119,11 @@ summary.identifier-palette-item::-webkit-details-marker {
   }
 }
 
-/* App interaction guard: keep editor modals as centered windows. */
+/* App interaction guard: keep editor menus and floating windows above the canvas. */
 .dialog-backdrop {
   position: fixed !important;
   inset: 0 !important;
-  z-index: 100 !important;
+  z-index: 900 !important;
   display: grid !important;
   place-items: center !important;
   align-items: center !important;
@@ -2138,7 +2144,26 @@ summary.identifier-palette-item::-webkit-details-marker {
   max-height: calc(100vh - 48px) !important;
   margin: 0 !important;
   overflow: auto !important;
-  transform: none !important;
+  transform: translate(var(--dialog-drag-x, 0px), var(--dialog-drag-y, 0px)) !important;
+  will-change: transform;
+}
+
+.draggable-dialog .dialog-header {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.draggable-dialog[data-dragging="true"] .dialog-header {
+  cursor: grabbing;
+}
+
+.draggable-dialog .dialog-header button,
+.draggable-dialog .dialog-header input,
+.draggable-dialog .dialog-header select,
+.draggable-dialog .dialog-header textarea,
+.draggable-dialog .dialog-header a {
+  cursor: pointer;
 }
 
 .dialog-backdrop > .creation-dialog {
@@ -2154,5 +2179,5 @@ summary.identifier-palette-item::-webkit-details-marker {
 }
 
 .menu-dropdown {
-  z-index: 120;
+  z-index: 310 !important;
 }

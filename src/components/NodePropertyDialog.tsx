@@ -4,6 +4,7 @@ import { findNode, getIdentifierDefinition, typeLabels } from '../model/document
 import type { DoorSide, MapYDocument, MapYNode, Transform } from '../model/types';
 import { openAssetFile } from '../platformFiles';
 import { useEditorStore } from '../store/editorStore';
+import { useDraggableWindow } from '../hooks/useDraggableWindow';
 
 const doorSideLabels: Record<DoorSide, string> = {
   top: '上',
@@ -80,6 +81,7 @@ export function NodePropertyDialog() {
   const updateDoorAnchor = useEditorStore((state) => state.updateDoorAnchor);
   const updateSceneRegion = useEditorStore((state) => state.updateSceneRegion);
   const deleteSelected = useEditorStore((state) => state.deleteSelected);
+  const draggableWindow = useDraggableWindow();
   const selected = findNode(document, inspectorNodeId);
 
   if (!selected) {
@@ -99,8 +101,14 @@ export function NodePropertyDialog() {
 
   const dialog = (
     <div className="dialog-backdrop" onMouseDown={closeNodeInspector} role="presentation">
-      <section className="node-property-dialog" aria-label="对象属性窗口" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="dialog-header">
+      <section
+        className="node-property-dialog draggable-dialog"
+        aria-label="对象属性窗口"
+        data-dragging={draggableWindow.isDragging || undefined}
+        onMouseDown={(event) => event.stopPropagation()}
+        style={draggableWindow.style}
+      >
+        <div className="dialog-header" {...draggableWindow.dragHandleProps}>
           <div>
             <div className="dialog-kicker">对象属性</div>
             <h2>{selected.name}</h2>

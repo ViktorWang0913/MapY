@@ -6,6 +6,7 @@ import { getParentWorldOrigin } from '../model/geometry';
 import type { ElementType, ShapeKind } from '../model/types';
 import { openAssetFile } from '../platformFiles';
 import { useEditorStore } from '../store/editorStore';
+import { useDraggableWindow } from '../hooks/useDraggableWindow';
 
 const shapeOptions: ShapeKind[] = ['circle', 'diamond', 'triangle', 'star'];
 
@@ -25,6 +26,7 @@ export function CreationDialog() {
   const updateIdentifierDefinition = useEditorStore((state) => state.updateIdentifierDefinition);
   const addAsset = useEditorStore((state) => state.addAsset);
   const setWorkspaceMode = useEditorStore((state) => state.setWorkspaceMode);
+  const draggableWindow = useDraggableWindow();
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
   const [kind, setKind] = useState('');
@@ -217,8 +219,8 @@ export function CreationDialog() {
 
   const dialog = (
     <div className="dialog-backdrop" role="presentation">
-      <form className="creation-dialog" onSubmit={handleSubmit}>
-        <header className="dialog-header">
+      <form className="creation-dialog draggable-dialog" data-dragging={draggableWindow.isDragging || undefined} onSubmit={handleSubmit} style={draggableWindow.style}>
+        <header className="dialog-header" {...draggableWindow.dragHandleProps}>
           <div>
             <span className="dialog-kicker">Canvas 创建菜单</span>
             <h2>{isIdentifierDefinitionEditor ? `${isEditing ? '编辑' : '创建'}标识类型` : `${isEditing ? '编辑' : '创建'}${label}`}</h2>
