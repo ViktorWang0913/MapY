@@ -4,7 +4,9 @@
 
 ## 下载
 
-Windows：[MapY_0.1.0_x64-setup.exe](public/downloads/MapY_0.1.0_x64-setup.exe)（Win10/11 x64，未签名）
+Windows：[MapY_0.1.0_x64-setup.exe](download/MapY_0.1.0_x64-setup.exe)（Win10/11 x64，未签名）
+
+![界面示例](download/MapY_UI_example.png)
 
 ## 开发
 

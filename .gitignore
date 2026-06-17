@@ -17,8 +17,8 @@ src-tauri/gen/schemas/
 *.deb
 *.rpm
 *.exe
-!public/downloads/
-!public/downloads/**
+!download/
+!download/**
 
 # Local environment files
 .env
