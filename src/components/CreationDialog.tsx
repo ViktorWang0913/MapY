@@ -1,7 +1,15 @@
 import { Plus, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { defaultColors, defaultShape, findNode, getIdentifierDefinition, shapeLabels, typeLabels } from '../model/document';
+import {
+  defaultColors,
+  defaultShape,
+  defaultTransform,
+  findNode,
+  getIdentifierDefinition,
+  shapeLabels,
+  typeLabels
+} from '../model/document';
 import { getParentWorldOrigin } from '../model/geometry';
 import type { ElementType, ShapeKind } from '../model/types';
 import { openAssetFile } from '../platformFiles';
@@ -75,8 +83,9 @@ export function CreationDialog() {
     setOpacity(Math.round((editableNode?.opacity ?? (creationType === 'scene' ? 0.24 : 1)) * 100));
     setX(editableNode?.transform.x ?? (creationType === 'scene' ? 0 : grid));
     setY(editableNode?.transform.y ?? (creationType === 'scene' ? 0 : grid));
-    setWidth(editableNode?.transform.width ?? (creationType === 'scene' ? grid * 12 : creationType === 'structure' ? grid * 4 : grid));
-    setHeight(editableNode?.transform.height ?? (creationType === 'scene' ? grid * 8 : creationType === 'structure' ? grid * 3 : grid));
+    const fallbackTransform = defaultTransform(creationType, grid);
+    setWidth(editableNode?.transform.width ?? fallbackTransform.width);
+    setHeight(editableNode?.transform.height ?? fallbackTransform.height);
     setHasCollision(editableNode?.hasCollision ?? creationType === 'structure');
     setParentSceneId(creationType === 'scene' ? editableNode?.regionId || '' : editableNode?.parentSceneId || defaultSceneId);
     setIdentifierDefinitionId(editableNode?.type === 'identifier' ? editableNode.identifierDefinitionId || editableIdentifierDefinition?.id || '' : '');

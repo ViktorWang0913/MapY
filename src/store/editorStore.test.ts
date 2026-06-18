@@ -213,7 +213,7 @@ describe('editor store', () => {
 
     useEditorStore.getState().updateNodeTransform(structure.id, { x: 32, y: 32, width: 64, height: 64, rotation: 0 });
 
-    expect(useEditorStore.getState().document.structures[0].tiles).toHaveLength(4);
+    expect(useEditorStore.getState().document.structures[0].tiles).toHaveLength(256);
   });
 
   it('deletes identifier definitions and placed instances', () => {

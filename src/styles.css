@@ -519,6 +519,14 @@ button {
   outline: none;
 }
 
+.canvas-panel.is-tile-editing canvas {
+  cursor: crosshair;
+}
+
+.canvas-panel.is-panning canvas {
+  cursor: grabbing;
+}
+
 .document-tabs {
   position: absolute;
   top: 10px;
@@ -630,7 +638,8 @@ button {
   pointer-events: none;
 }
 
-.canvas-hud span {
+.canvas-hud span,
+.canvas-hud button {
   min-width: 86px;
   padding: 5px 8px;
   border: 1px solid #2d4058;
@@ -639,6 +648,23 @@ button {
   color: #a9bdd6;
   font-size: 12px;
   text-align: center;
+}
+
+.canvas-hud button {
+  pointer-events: auto;
+  cursor: pointer;
+  transition:
+    border-color 160ms cubic-bezier(0.25, 1, 0.5, 1),
+    background-color 160ms cubic-bezier(0.25, 1, 0.5, 1),
+    color 160ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.canvas-hud button:hover,
+.canvas-hud button:focus-visible {
+  outline: 0;
+  border-color: #c99a3a;
+  background: rgba(201, 154, 58, 0.12);
+  color: #f0c96d;
 }
 
 .canvas-edit-bar {

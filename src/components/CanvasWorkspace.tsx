@@ -119,42 +119,98 @@ function useCachedImage(dataUrl?: string): HTMLImageElement | undefined {
   return image;
 }
 
-function renderGridLines(width: number, height: number, viewport: { x: number; y: number; scale: number }, gridSize: number) {
+function InfiniteGrid({
+  height,
+  tileEditing,
+  viewport,
+  width,
+  gridSize
+}: {
+  height: number;
+  tileEditing: boolean;
+  viewport: { x: number; y: number; scale: number };
+  width: number;
+  gridSize: number;
+}) {
   const worldLeft = -viewport.x / viewport.scale;
   const worldTop = -viewport.y / viewport.scale;
   const worldRight = (width - viewport.x) / viewport.scale;
   const worldBottom = (height - viewport.y) / viewport.scale;
-  const startX = Math.floor(worldLeft / gridSize) * gridSize;
-  const endX = Math.ceil(worldRight / gridSize) * gridSize;
-  const startY = Math.floor(worldTop / gridSize) * gridSize;
-  const endY = Math.ceil(worldBottom / gridSize) * gridSize;
-  const lines = [];
+  let gridStep = gridSize;
+  const minimumScreenSpacing = tileEditing ? 3 : 8;
 
-  for (let x = startX; x <= endX; x += gridSize) {
-    lines.push(
-      <Line
-        key={`v-${x}`}
-        listening={false}
-        points={[x, startY, x, endY]}
-        stroke={x === 0 ? '#61748f' : '#24364d'}
-        strokeWidth={x === 0 ? 1.2 : 0.7}
-      />
-    );
+  while (gridStep * viewport.scale < minimumScreenSpacing) {
+    gridStep *= 2;
   }
 
-  for (let y = startY; y <= endY; y += gridSize) {
-    lines.push(
-      <Line
-        key={`h-${y}`}
-        listening={false}
-        points={[startX, y, endX, y]}
-        stroke={y === 0 ? '#61748f' : '#24364d'}
-        strokeWidth={y === 0 ? 1.2 : 0.7}
-      />
-    );
-  }
+  const startX = Math.floor(worldLeft / gridStep) * gridStep;
+  const endX = Math.ceil(worldRight / gridStep) * gridStep;
+  const startY = Math.floor(worldTop / gridStep) * gridStep;
+  const endY = Math.ceil(worldBottom / gridStep) * gridStep;
+  const majorStep = gridSize * 8;
 
-  return lines;
+  return (
+    <Shape
+      listening={false}
+      perfectDrawEnabled={false}
+      sceneFunc={(context) => {
+        context.save();
+        context.beginPath();
+        context.strokeStyle = tileEditing ? '#22364b' : '#1b2a3a';
+        context.lineWidth = 0.65 / viewport.scale;
+
+        for (let x = startX; x <= endX; x += gridStep) {
+          if (x === 0 || x % majorStep === 0) {
+            continue;
+          }
+          context.moveTo(x, startY);
+          context.lineTo(x, endY);
+        }
+
+        for (let y = startY; y <= endY; y += gridStep) {
+          if (y === 0 || y % majorStep === 0) {
+            continue;
+          }
+          context.moveTo(startX, y);
+          context.lineTo(endX, y);
+        }
+        context.stroke();
+
+        context.beginPath();
+        context.strokeStyle = '#31485f';
+        context.lineWidth = 0.9 / viewport.scale;
+        for (let x = Math.floor(startX / majorStep) * majorStep; x <= endX; x += majorStep) {
+          if (x === 0) {
+            continue;
+          }
+          context.moveTo(x, startY);
+          context.lineTo(x, endY);
+        }
+        for (let y = Math.floor(startY / majorStep) * majorStep; y <= endY; y += majorStep) {
+          if (y === 0) {
+            continue;
+          }
+          context.moveTo(startX, y);
+          context.lineTo(endX, y);
+        }
+        context.stroke();
+
+        context.beginPath();
+        context.strokeStyle = '#71849a';
+        context.lineWidth = 1.25 / viewport.scale;
+        if (worldLeft <= 0 && worldRight >= 0) {
+          context.moveTo(0, startY);
+          context.lineTo(0, endY);
+        }
+        if (worldTop <= 0 && worldBottom >= 0) {
+          context.moveTo(startX, 0);
+          context.lineTo(endX, 0);
+        }
+        context.stroke();
+        context.restore();
+      }}
+    />
+  );
 }
 
 interface ExportImageDetail {
@@ -413,8 +469,8 @@ function NodeShape({
     const nextTransform = {
       x: group.x(),
       y: group.y(),
-      width: Math.max(16, absoluteTransform.width * scaleX),
-      height: Math.max(16, absoluteTransform.height * scaleY),
+      width: Math.max(gridSize, absoluteTransform.width * scaleX),
+      height: Math.max(gridSize, absoluteTransform.height * scaleY),
       rotation: group.rotation()
     };
     group.scaleX(1);
@@ -918,7 +974,9 @@ export function CanvasWorkspace() {
   const pendingPaintPointRef = useRef<Point | undefined>(undefined);
   const paintFrameRef = useRef<number | undefined>(undefined);
   const activePaintModeRef = useRef<TilePaintMode>('paint');
+  const canvasPanRef = useRef<{ x: number; y: number } | undefined>(undefined);
   const [tilePaintMode, setTilePaintMode] = useState<TilePaintMode>('paint');
+  const [isCanvasPanning, setIsCanvasPanning] = useState(false);
   const document = useEditorStore((state) => state.document);
   const viewport = useEditorStore((state) => state.viewport);
   const selectedId = useEditorStore((state) => state.selectedId);
@@ -1157,6 +1215,33 @@ export function CanvasWorkspace() {
     beginTileStroke('structure', worldPoint, mode);
   }
 
+  function beginCanvasPan(event: Konva.KonvaEventObject<MouseEvent>) {
+    event.evt.preventDefault();
+    canvasPanRef.current = { x: event.evt.clientX, y: event.evt.clientY };
+    setIsCanvasPanning(true);
+  }
+
+  function updateCanvasPan(event: Konva.KonvaEventObject<MouseEvent>) {
+    const previous = canvasPanRef.current;
+    if (!previous) {
+      return false;
+    }
+
+    const next = { x: event.evt.clientX, y: event.evt.clientY };
+    const currentViewport = useEditorStore.getState().viewport;
+    setViewport({
+      x: currentViewport.x + next.x - previous.x,
+      y: currentViewport.y + next.y - previous.y
+    });
+    canvasPanRef.current = next;
+    return true;
+  }
+
+  function finishCanvasPan() {
+    canvasPanRef.current = undefined;
+    setIsCanvasPanning(false);
+  }
+
   useEffect(() => {
     function isInsideCanvas(clientX: number, clientY: number) {
       const rect = stageRef.current?.container().getBoundingClientRect() || containerRef.current?.getBoundingClientRect();
@@ -1354,7 +1439,7 @@ export function CanvasWorkspace() {
 
   return (
     <section
-      className="canvas-panel"
+      className={`canvas-panel${tileEditing ? ' is-tile-editing' : ''}${isCanvasPanning ? ' is-panning' : ''}`}
       onContextMenu={(event) => {
         if (tileEditing) {
           event.preventDefault();
@@ -1388,6 +1473,11 @@ export function CanvasWorkspace() {
           }
         }}
         onMouseDown={(event) => {
+          if (event.evt.button === 1) {
+            beginCanvasPan(event);
+            return;
+          }
+
           if (!tileEditing) {
             return;
           }
@@ -1403,9 +1493,14 @@ export function CanvasWorkspace() {
           }
         }}
         onMouseLeave={() => {
+          finishCanvasPan();
           finishPaintStroke();
         }}
         onMouseMove={(event) => {
+          if (updateCanvasPan(event)) {
+            return;
+          }
+
           if (!tileEditing || !paintingRef.current) {
             return;
           }
@@ -1414,6 +1509,7 @@ export function CanvasWorkspace() {
           queuePaintStrokeUpdate();
         }}
         onMouseUp={() => {
+          finishCanvasPan();
           finishPaintStroke();
         }}
         onTouchEnd={() => {
@@ -1443,7 +1539,15 @@ export function CanvasWorkspace() {
         x={viewport.x}
         y={viewport.y}
       >
-        <Layer listening={false}>{renderGridLines(viewport.width, viewport.height, viewport, document.settings.gridSize)}</Layer>
+        <Layer listening={false}>
+          <InfiniteGrid
+            gridSize={document.settings.gridSize}
+            height={viewport.height}
+            tileEditing={tileEditing}
+            viewport={viewport}
+            width={viewport.width}
+          />
+        </Layer>
         {workspaceMode === 'world' && <Layer listening={false}>{connectionLines}</Layer>}
         <Layer>
           {renderableNodes.map((node) => {
@@ -1530,7 +1634,6 @@ export function CanvasWorkspace() {
             擦除
           </button>
         </div>
-        <span>Pixel {document.settings.gridSize}px</span>
       </div>
       {workspaceMode === 'world' && (
         <div className="world-overlay-controls">
@@ -1564,11 +1667,17 @@ export function CanvasWorkspace() {
         </div>
       )}
       <div className="canvas-hud">
-        <span>{workspaceMode === 'world' ? '世界地图' : '场景编辑'}</span>
+        {workspaceMode === 'world' && <span>世界地图</span>}
         {tileEditing && <span>{tileTool === 'scene' ? '地图 Pixel' : '结构 Pixel'} · {tilePaintMode === 'paint' ? '绘制' : '擦除'}</span>}
         {workspaceMode === 'world' && <span>{connectionMode ? '连接模式' : '普通选择'}</span>}
         <span>缩放 {Math.round(viewport.scale * 100)}%</span>
-        <span>网格 {document.settings.gridSize}px</span>
+        <button
+          onClick={() => setViewport({ x: viewport.width / 2, y: viewport.height / 2 })}
+          title="将世界坐标原点移回 Canvas 中心"
+          type="button"
+        >
+          原点
+        </button>
       </div>
       {workspaceMode === 'world' && <MiniMap document={document} setViewport={setViewport} viewport={viewport} />}
     </section>

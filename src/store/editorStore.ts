@@ -8,6 +8,7 @@ import {
   createRectTiles,
   defaultColors,
   defaultShape,
+  defaultTransform,
   findNode,
   getAllNodes,
   getCollection,
@@ -659,8 +660,9 @@ function makeTransform(
 ): Transform {
   const gridSize = document.settings.gridSize;
   const snapped = snapPoint(worldPoint, gridSize);
-  const width = options.width ?? (type === 'scene' ? gridSize * 12 : type === 'structure' ? gridSize * 4 : type === 'annotation' ? gridSize * 5 : gridSize);
-  const height = options.height ?? (type === 'scene' ? gridSize * 8 : type === 'structure' ? gridSize * 3 : type === 'annotation' ? gridSize * 2 : gridSize);
+  const fallbackTransform = defaultTransform(type, gridSize);
+  const width = options.width ?? fallbackTransform.width;
+  const height = options.height ?? fallbackTransform.height;
 
   return snapTransform(
     {

@@ -15,8 +15,15 @@ import type {
   Transform
 } from './types';
 
-export const DOCUMENT_VERSION = 8;
-export const DEFAULT_GRID_SIZE = 32;
+export const DOCUMENT_VERSION = 9;
+export const DEFAULT_GRID_SIZE = 4;
+
+const DEFAULT_SCENE_WIDTH = 384;
+const DEFAULT_SCENE_HEIGHT = 256;
+const DEFAULT_STRUCTURE_WIDTH = 128;
+const DEFAULT_STRUCTURE_HEIGHT = 96;
+const DEFAULT_ANNOTATION_WIDTH = 160;
+const DEFAULT_ANNOTATION_HEIGHT = 64;
 
 export const DEFAULT_REGIONS: RegionDefinition[] = [
   { id: 'region-unassigned', name: '未分区', color: '#2d7dd2' }
@@ -94,15 +101,15 @@ export function createId(prefix: ElementType | 'asset' | 'region' | 'identifier-
 
 export function defaultTransform(type: ElementType, gridSize = DEFAULT_GRID_SIZE): Transform {
   if (type === 'scene') {
-    return { x: 0, y: 0, width: gridSize * 12, height: gridSize * 8, rotation: 0 };
+    return { x: 0, y: 0, width: DEFAULT_SCENE_WIDTH, height: DEFAULT_SCENE_HEIGHT, rotation: 0 };
   }
 
   if (type === 'structure') {
-    return { x: gridSize, y: gridSize, width: gridSize * 4, height: gridSize * 3, rotation: 0 };
+    return { x: gridSize, y: gridSize, width: DEFAULT_STRUCTURE_WIDTH, height: DEFAULT_STRUCTURE_HEIGHT, rotation: 0 };
   }
 
   if (type === 'annotation') {
-    return { x: 0, y: 0, width: gridSize * 5, height: gridSize * 2, rotation: 0 };
+    return { x: 0, y: 0, width: DEFAULT_ANNOTATION_WIDTH, height: DEFAULT_ANNOTATION_HEIGHT, rotation: 0 };
   }
 
   return { x: 0, y: 0, width: gridSize, height: gridSize, rotation: 0 };
@@ -290,8 +297,8 @@ function normalizeTransform(value: unknown, fallback: Transform): Transform {
   return {
     x: Number(candidate?.x ?? fallback.x),
     y: Number(candidate?.y ?? fallback.y),
-    width: Math.max(8, Number(candidate?.width ?? fallback.width)),
-    height: Math.max(8, Number(candidate?.height ?? fallback.height)),
+    width: Math.max(DEFAULT_GRID_SIZE, Number(candidate?.width ?? fallback.width)),
+    height: Math.max(DEFAULT_GRID_SIZE, Number(candidate?.height ?? fallback.height)),
     rotation: Number(candidate?.rotation ?? fallback.rotation)
   };
 }
@@ -317,6 +324,47 @@ function normalizeTiles(value: unknown): Point[] | undefined {
     });
 
   return tiles.length > 0 ? tiles : undefined;
+}
+
+function snapImportedValue(value: number): number {
+  return Math.round(value / DEFAULT_GRID_SIZE) * DEFAULT_GRID_SIZE;
+}
+
+function migrateTransformToPixelGrid(transform: Transform): Transform {
+  return {
+    x: snapImportedValue(transform.x),
+    y: snapImportedValue(transform.y),
+    width: Math.max(DEFAULT_GRID_SIZE, snapImportedValue(transform.width)),
+    height: Math.max(DEFAULT_GRID_SIZE, snapImportedValue(transform.height)),
+    rotation: transform.rotation
+  };
+}
+
+function migrateStructureTiles(tiles: Point[] | undefined, sourceGridSize: number): Point[] | undefined {
+  if (!tiles || tiles.length === 0 || sourceGridSize === DEFAULT_GRID_SIZE) {
+    return tiles;
+  }
+
+  const migrated = new Map<string, Point>();
+
+  for (const tile of tiles) {
+    const left = tile.x * sourceGridSize;
+    const top = tile.y * sourceGridSize;
+    const right = left + sourceGridSize;
+    const bottom = top + sourceGridSize;
+    const startX = Math.floor(left / DEFAULT_GRID_SIZE);
+    const startY = Math.floor(top / DEFAULT_GRID_SIZE);
+    const endX = Math.ceil(right / DEFAULT_GRID_SIZE);
+    const endY = Math.ceil(bottom / DEFAULT_GRID_SIZE);
+
+    for (let y = startY; y < endY; y += 1) {
+      for (let x = startX; x < endX; x += 1) {
+        migrated.set(`${x}:${y}`, { x, y });
+      }
+    }
+  }
+
+  return [...migrated.values()];
 }
 
 function sceneTransformFromLegacyTiles(transform: Transform, tiles: Point[] | undefined, gridSize: number): Transform {
@@ -350,14 +398,18 @@ function normalizeNode(value: unknown, type: ElementType, index: number, gridSiz
   const fallbackTransform = defaultTransform(type, gridSize);
   const rawTransform = normalizeTransform(candidate?.transform, fallbackTransform);
   const rawTiles = normalizeTiles(candidate?.tiles);
-  const transform = type === 'scene' ? sceneTransformFromLegacyTiles(rawTransform, rawTiles, gridSize) : rawTransform;
+  const legacyTransform = type === 'scene' ? sceneTransformFromLegacyTiles(rawTransform, rawTiles, gridSize) : rawTransform;
+  const transform = migrateTransformToPixelGrid(legacyTransform);
+  const migratedTiles = type === 'structure' ? migrateStructureTiles(rawTiles, gridSize) : undefined;
 
   return {
     id: String(candidate?.id || createId(type)),
     type,
     name: String(candidate?.name || `${typeLabels[type]} ${index + 1}`),
     transform,
-    tiles: type === 'structure' ? rawTiles || createRectTiles(transform.width, transform.height, gridSize) : undefined,
+    tiles: type === 'structure'
+      ? migratedTiles || createRectTiles(transform.width, transform.height, DEFAULT_GRID_SIZE)
+      : undefined,
     assetId: candidate?.assetId ? String(candidate.assetId) : undefined,
     color: String(candidate?.color || defaultColors[type]),
     opacity: Number.isFinite(candidate?.opacity) ? Number(candidate?.opacity) : undefined,
@@ -533,12 +585,12 @@ export function normalizeDocument(value: unknown): MapYDocument {
       doors?: unknown;
     }
   >;
-  const gridSize = Number(candidate.settings?.gridSize || DEFAULT_GRID_SIZE);
-  const identifierInstances = normalizeNodeArray(candidate.identifierInstances, 'identifier', gridSize);
+  const sourceGridSize = Math.max(1, Number(candidate.settings?.gridSize || DEFAULT_GRID_SIZE));
+  const identifierInstances = normalizeNodeArray(candidate.identifierInstances, 'identifier', sourceGridSize);
   const legacyInstances = {
-    items: normalizeLegacyIdentifierInstances(candidate.items, LEGACY_IDENTIFIER_DEFINITIONS[0], gridSize),
-    savePoints: normalizeLegacyIdentifierInstances(candidate.savePoints, LEGACY_IDENTIFIER_DEFINITIONS[1], gridSize),
-    markers: normalizeLegacyIdentifierInstances(candidate.markers, LEGACY_IDENTIFIER_DEFINITIONS[2], gridSize)
+    items: normalizeLegacyIdentifierInstances(candidate.items, LEGACY_IDENTIFIER_DEFINITIONS[0], sourceGridSize),
+    savePoints: normalizeLegacyIdentifierInstances(candidate.savePoints, LEGACY_IDENTIFIER_DEFINITIONS[1], sourceGridSize),
+    markers: normalizeLegacyIdentifierInstances(candidate.markers, LEGACY_IDENTIFIER_DEFINITIONS[2], sourceGridSize)
   };
   const identifiers = ensureIdentifierDefinitions(
     normalizeIdentifierDefinitions(candidate.identifiers),
@@ -550,10 +602,10 @@ export function normalizeDocument(value: unknown): MapYDocument {
     version: DOCUMENT_VERSION,
     name: String(candidate.name || '导入的地图'),
     settings: {
-      gridSize
+      gridSize: DEFAULT_GRID_SIZE
     },
-    scenes: normalizeNodeArray(candidate.scenes, 'scene', gridSize),
-    structures: normalizeNodeArray(candidate.structures, 'structure', gridSize),
+    scenes: normalizeNodeArray(candidate.scenes, 'scene', sourceGridSize),
+    structures: normalizeNodeArray(candidate.structures, 'structure', sourceGridSize),
     identifiers,
     identifierInstances: [
       ...identifierInstances,
@@ -561,8 +613,8 @@ export function normalizeDocument(value: unknown): MapYDocument {
       ...legacyInstances.savePoints,
       ...legacyInstances.markers
     ],
-    doors: normalizeNodeArray(candidate.doors, 'connection', gridSize),
-    annotations: normalizeNodeArray(candidate.annotations, 'annotation', gridSize),
+    doors: normalizeNodeArray(candidate.doors, 'connection', sourceGridSize),
+    annotations: normalizeNodeArray(candidate.annotations, 'annotation', sourceGridSize),
     assets: normalizeAssets(candidate.assets),
     regions: normalizeRegions(candidate.regions),
     stitching: {

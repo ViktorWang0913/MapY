@@ -7,9 +7,9 @@ describe('document serialization', () => {
     const original = addNode(createEmptyDocument('测试地图'), scene);
     const imported = normalizeDocument(JSON.parse(serializeDocument(original)));
 
-    expect(imported.version).toBe(8);
+    expect(imported.version).toBe(9);
     expect(imported.name).toBe('测试地图');
-    expect(imported.settings.gridSize).toBe(32);
+    expect(imported.settings.gridSize).toBe(4);
     expect(imported.scenes).toHaveLength(1);
     expect(imported.scenes[0].tiles).toBeUndefined();
     expect(imported.structures).toEqual([]);
@@ -63,6 +63,7 @@ describe('document serialization', () => {
     });
 
     expect(imported.scenes[0].transform).toMatchObject({ x: 64, y: 32, width: 64, height: 64 });
+    expect(imported.settings.gridSize).toBe(4);
     expect(imported.scenes[0].tiles).toBeUndefined();
     expect(imported.identifiers.some((definition) => definition.id === 'identifier-item')).toBe(true);
     expect(imported.identifierInstances).toHaveLength(1);
@@ -76,5 +77,30 @@ describe('document serialization', () => {
     expect(serialized.items).toBeUndefined();
     expect(serialized.savePoints).toBeUndefined();
     expect(serialized.markers).toBeUndefined();
+  });
+
+  it('migrates legacy structure pixels to the 4px grid without changing its visible shape', () => {
+    const imported = normalizeDocument({
+      name: 'Legacy structure',
+      settings: { gridSize: 32 },
+      scenes: [
+        {
+          id: 'scene-a',
+          transform: { x: 0, y: 0, width: 384, height: 256, rotation: 0 }
+        }
+      ],
+      structures: [
+        {
+          id: 'structure-a',
+          transform: { x: 32, y: 32, width: 32, height: 32, rotation: 0 },
+          parentSceneId: 'scene-a',
+          tiles: [{ x: 0, y: 0 }]
+        }
+      ]
+    });
+
+    expect(imported.settings.gridSize).toBe(4);
+    expect(imported.structures[0].transform).toMatchObject({ x: 32, y: 32, width: 32, height: 32 });
+    expect(imported.structures[0].tiles).toHaveLength(64);
   });
 });
