@@ -18,6 +18,18 @@ import type {
 export const DOCUMENT_VERSION = 9;
 export const DEFAULT_GRID_SIZE = 4;
 
+// User-customizable "minimum pixel unit" (grid/snap size) bounds.
+export const MIN_GRID_SIZE = 1;
+export const MAX_GRID_SIZE = 64;
+
+export function clampGridSize(value: unknown): number {
+  const rounded = Math.round(Number(value));
+  if (!Number.isFinite(rounded)) {
+    return DEFAULT_GRID_SIZE;
+  }
+  return Math.min(MAX_GRID_SIZE, Math.max(MIN_GRID_SIZE, rounded));
+}
+
 const DEFAULT_SCENE_WIDTH = 384;
 const DEFAULT_SCENE_HEIGHT = 256;
 const DEFAULT_STRUCTURE_WIDTH = 128;
@@ -166,6 +178,7 @@ export function createDefaultNode(
     opacity: options.opacity,
     shape: options.shape || defaultShape(type),
     hasCollision: options.hasCollision ?? defaultCollision(type),
+    scaleWithScene: options.scaleWithScene,
     parentSceneId: options.parentSceneId,
     parentStructureId: options.parentStructureId,
     regionId: options.regionId,
@@ -326,22 +339,26 @@ function normalizeTiles(value: unknown): Point[] | undefined {
   return tiles.length > 0 ? tiles : undefined;
 }
 
-function snapImportedValue(value: number): number {
-  return Math.round(value / DEFAULT_GRID_SIZE) * DEFAULT_GRID_SIZE;
+function snapImportedValue(value: number, gridSize: number): number {
+  return Math.round(value / gridSize) * gridSize;
 }
 
-function migrateTransformToPixelGrid(transform: Transform): Transform {
+function migrateTransformToPixelGrid(transform: Transform, gridSize: number): Transform {
   return {
-    x: snapImportedValue(transform.x),
-    y: snapImportedValue(transform.y),
-    width: Math.max(DEFAULT_GRID_SIZE, snapImportedValue(transform.width)),
-    height: Math.max(DEFAULT_GRID_SIZE, snapImportedValue(transform.height)),
+    x: snapImportedValue(transform.x, gridSize),
+    y: snapImportedValue(transform.y, gridSize),
+    width: Math.max(gridSize, snapImportedValue(transform.width, gridSize)),
+    height: Math.max(gridSize, snapImportedValue(transform.height, gridSize)),
     rotation: transform.rotation
   };
 }
 
-function migrateStructureTiles(tiles: Point[] | undefined, sourceGridSize: number): Point[] | undefined {
-  if (!tiles || tiles.length === 0 || sourceGridSize === DEFAULT_GRID_SIZE) {
+function migrateStructureTiles(
+  tiles: Point[] | undefined,
+  sourceGridSize: number,
+  targetGridSize: number
+): Point[] | undefined {
+  if (!tiles || tiles.length === 0 || sourceGridSize === targetGridSize) {
     return tiles;
   }
 
@@ -352,10 +369,10 @@ function migrateStructureTiles(tiles: Point[] | undefined, sourceGridSize: numbe
     const top = tile.y * sourceGridSize;
     const right = left + sourceGridSize;
     const bottom = top + sourceGridSize;
-    const startX = Math.floor(left / DEFAULT_GRID_SIZE);
-    const startY = Math.floor(top / DEFAULT_GRID_SIZE);
-    const endX = Math.ceil(right / DEFAULT_GRID_SIZE);
-    const endY = Math.ceil(bottom / DEFAULT_GRID_SIZE);
+    const startX = Math.floor(left / targetGridSize);
+    const startY = Math.floor(top / targetGridSize);
+    const endX = Math.ceil(right / targetGridSize);
+    const endY = Math.ceil(bottom / targetGridSize);
 
     for (let y = startY; y < endY; y += 1) {
       for (let x = startX; x < endX; x += 1) {
@@ -393,14 +410,21 @@ function normalizeShape(value: unknown, type: ElementType): ShapeKind {
     : defaultShape(type);
 }
 
-function normalizeNode(value: unknown, type: ElementType, index: number, gridSize: number): MapYNode {
+function normalizeNode(
+  value: unknown,
+  type: ElementType,
+  index: number,
+  sourceGridSize: number,
+  targetGridSize: number
+): MapYNode {
   const candidate = value as Partial<MapYNode> | undefined;
-  const fallbackTransform = defaultTransform(type, gridSize);
+  const fallbackTransform = defaultTransform(type, targetGridSize);
   const rawTransform = normalizeTransform(candidate?.transform, fallbackTransform);
   const rawTiles = normalizeTiles(candidate?.tiles);
-  const legacyTransform = type === 'scene' ? sceneTransformFromLegacyTiles(rawTransform, rawTiles, gridSize) : rawTransform;
-  const transform = migrateTransformToPixelGrid(legacyTransform);
-  const migratedTiles = type === 'structure' ? migrateStructureTiles(rawTiles, gridSize) : undefined;
+  const legacyTransform =
+    type === 'scene' ? sceneTransformFromLegacyTiles(rawTransform, rawTiles, sourceGridSize) : rawTransform;
+  const transform = migrateTransformToPixelGrid(legacyTransform, targetGridSize);
+  const migratedTiles = type === 'structure' ? migrateStructureTiles(rawTiles, sourceGridSize, targetGridSize) : undefined;
 
   return {
     id: String(candidate?.id || createId(type)),
@@ -408,13 +432,14 @@ function normalizeNode(value: unknown, type: ElementType, index: number, gridSiz
     name: String(candidate?.name || `${typeLabels[type]} ${index + 1}`),
     transform,
     tiles: type === 'structure'
-      ? migratedTiles || createRectTiles(transform.width, transform.height, DEFAULT_GRID_SIZE)
+      ? migratedTiles || createRectTiles(transform.width, transform.height, targetGridSize)
       : undefined,
     assetId: candidate?.assetId ? String(candidate.assetId) : undefined,
     color: String(candidate?.color || defaultColors[type]),
     opacity: Number.isFinite(candidate?.opacity) ? Number(candidate?.opacity) : undefined,
     shape: normalizeShape(candidate?.shape, type),
     hasCollision: Boolean(candidate?.hasCollision ?? defaultCollision(type)),
+    scaleWithScene: typeof candidate?.scaleWithScene === 'boolean' ? candidate.scaleWithScene : undefined,
     parentSceneId: candidate?.parentSceneId ? String(candidate.parentSceneId) : undefined,
     parentStructureId: candidate?.parentStructureId ? String(candidate.parentStructureId) : undefined,
     regionId: candidate?.regionId ? String(candidate.regionId) : undefined,
@@ -428,25 +453,31 @@ function normalizeNode(value: unknown, type: ElementType, index: number, gridSiz
   };
 }
 
-function normalizeNodeArray(value: unknown, type: ElementType, gridSize: number): MapYNode[] {
+function normalizeNodeArray(
+  value: unknown,
+  type: ElementType,
+  sourceGridSize: number,
+  targetGridSize: number
+): MapYNode[] {
   if (!Array.isArray(value)) {
     return [];
   }
 
-  return value.map((node, index) => normalizeNode(node, type, index, gridSize));
+  return value.map((node, index) => normalizeNode(node, type, index, sourceGridSize, targetGridSize));
 }
 
 function normalizeLegacyIdentifierInstances(
   value: unknown,
   definition: IdentifierDefinition,
-  gridSize: number
+  sourceGridSize: number,
+  targetGridSize: number
 ): MapYNode[] {
   if (!Array.isArray(value)) {
     return [];
   }
 
   return value.map((node, index) => {
-    const normalized = normalizeNode(node, 'identifier', index, gridSize);
+    const normalized = normalizeNode(node, 'identifier', index, sourceGridSize, targetGridSize);
     return {
       ...normalized,
       type: 'identifier',
@@ -586,11 +617,15 @@ export function normalizeDocument(value: unknown): MapYDocument {
     }
   >;
   const sourceGridSize = Math.max(1, Number(candidate.settings?.gridSize || DEFAULT_GRID_SIZE));
-  const identifierInstances = normalizeNodeArray(candidate.identifierInstances, 'identifier', sourceGridSize);
+  // Current-version documents keep their (possibly customized) grid; older/legacy
+  // documents are migrated to the default pixel grid exactly as before.
+  const isCurrentVersion = Number(candidate.version) === DOCUMENT_VERSION;
+  const targetGridSize = isCurrentVersion ? clampGridSize(sourceGridSize) : DEFAULT_GRID_SIZE;
+  const identifierInstances = normalizeNodeArray(candidate.identifierInstances, 'identifier', sourceGridSize, targetGridSize);
   const legacyInstances = {
-    items: normalizeLegacyIdentifierInstances(candidate.items, LEGACY_IDENTIFIER_DEFINITIONS[0], sourceGridSize),
-    savePoints: normalizeLegacyIdentifierInstances(candidate.savePoints, LEGACY_IDENTIFIER_DEFINITIONS[1], sourceGridSize),
-    markers: normalizeLegacyIdentifierInstances(candidate.markers, LEGACY_IDENTIFIER_DEFINITIONS[2], sourceGridSize)
+    items: normalizeLegacyIdentifierInstances(candidate.items, LEGACY_IDENTIFIER_DEFINITIONS[0], sourceGridSize, targetGridSize),
+    savePoints: normalizeLegacyIdentifierInstances(candidate.savePoints, LEGACY_IDENTIFIER_DEFINITIONS[1], sourceGridSize, targetGridSize),
+    markers: normalizeLegacyIdentifierInstances(candidate.markers, LEGACY_IDENTIFIER_DEFINITIONS[2], sourceGridSize, targetGridSize)
   };
   const identifiers = ensureIdentifierDefinitions(
     normalizeIdentifierDefinitions(candidate.identifiers),
@@ -602,10 +637,10 @@ export function normalizeDocument(value: unknown): MapYDocument {
     version: DOCUMENT_VERSION,
     name: String(candidate.name || '导入的地图'),
     settings: {
-      gridSize: DEFAULT_GRID_SIZE
+      gridSize: targetGridSize
     },
-    scenes: normalizeNodeArray(candidate.scenes, 'scene', sourceGridSize),
-    structures: normalizeNodeArray(candidate.structures, 'structure', sourceGridSize),
+    scenes: normalizeNodeArray(candidate.scenes, 'scene', sourceGridSize, targetGridSize),
+    structures: normalizeNodeArray(candidate.structures, 'structure', sourceGridSize, targetGridSize),
     identifiers,
     identifierInstances: [
       ...identifierInstances,
@@ -613,8 +648,8 @@ export function normalizeDocument(value: unknown): MapYDocument {
       ...legacyInstances.savePoints,
       ...legacyInstances.markers
     ],
-    doors: normalizeNodeArray(candidate.doors, 'connection', sourceGridSize),
-    annotations: normalizeNodeArray(candidate.annotations, 'annotation', sourceGridSize),
+    doors: normalizeNodeArray(candidate.doors, 'connection', sourceGridSize, targetGridSize),
+    annotations: normalizeNodeArray(candidate.annotations, 'annotation', sourceGridSize, targetGridSize),
     assets: normalizeAssets(candidate.assets),
     regions: normalizeRegions(candidate.regions),
     stitching: {

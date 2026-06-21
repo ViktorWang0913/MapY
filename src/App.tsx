@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { AiMapPanel } from './components/AiMapPanel';
 import { CanvasWorkspace } from './components/CanvasWorkspace';
 import { CreationDialog } from './components/CreationDialog';
 import { LeftPalette } from './components/LeftPalette';
@@ -24,6 +25,8 @@ function EditorApp() {
       </main>
       <CreationDialog />
       <NodePropertyDialog />
+      {/* AI map generation (first test version) — self-contained, safe to remove. */}
+      <AiMapPanel />
     </div>
   );
 }

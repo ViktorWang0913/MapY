@@ -30,6 +30,8 @@ export interface MapYNode {
   opacity?: number;
   shape: ShapeKind;
   hasCollision: boolean;
+  /** Structures only: whether the structure transforms proportionally when its parent scene is resized. Undefined = yes. */
+  scaleWithScene?: boolean;
   parentSceneId?: string;
   parentStructureId?: string;
   regionId?: string;
@@ -110,6 +112,7 @@ export interface CreateNodeOptions {
   opacity?: number;
   shape?: ShapeKind;
   hasCollision?: boolean;
+  scaleWithScene?: boolean;
   width?: number;
   height?: number;
   tiles?: Point[];

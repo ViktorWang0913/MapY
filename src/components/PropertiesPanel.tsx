@@ -1,5 +1,5 @@
 import { MousePointer2, Plus, Trash2 } from 'lucide-react';
-import { findNode, getIdentifierDefinition, typeLabels } from '../model/document';
+import { findNode, getIdentifierDefinition, MAX_GRID_SIZE, MIN_GRID_SIZE, typeLabels } from '../model/document';
 import type { DoorSide, MapYDocument, MapYNode, Transform } from '../model/types';
 import { openAssetFile } from '../platformFiles';
 import { useEditorStore } from '../store/editorStore';
@@ -41,6 +41,29 @@ function RegionPanel({ document }: { document: MapYDocument }) {
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+function CanvasSettingsPanel({ document }: { document: MapYDocument }) {
+  const setGridSize = useEditorStore((state) => state.setGridSize);
+
+  return (
+    <section className="property-section">
+      <div className="section-heading">
+        <span>画布</span>
+      </div>
+      <label>
+        最小像素单位 (px)
+        <input
+          max={MAX_GRID_SIZE}
+          min={MIN_GRID_SIZE}
+          onChange={(event) => setGridSize(Number(event.target.value))}
+          step={1}
+          type="number"
+          value={document.settings.gridSize}
+        />
+      </label>
     </section>
   );
 }
@@ -213,6 +236,7 @@ export function PropertiesPanel() {
         <em>{selected ? typeLabels[selected.type] : '项目概览'}</em>
       </div>
       <div className="property-stack compact">
+        <CanvasSettingsPanel document={document} />
         <RegionPanel document={document} />
         <StatsPanel document={document} />
       </div>
@@ -293,6 +317,16 @@ export function PropertiesPanel() {
                   type="checkbox"
                 />
                 具有物理碰撞
+              </label>
+            )}
+            {selected.type === 'structure' && (
+              <label className="checkbox-line" title="开启：缩放父地图时本结构等比变换；关闭：本结构保持自身尺寸/位置">
+                <input
+                  checked={selected.scaleWithScene !== false}
+                  onChange={(event) => updateNode(selected.id, { scaleWithScene: event.target.checked })}
+                  type="checkbox"
+                />
+                随地图缩放
               </label>
             )}
             <NodeAssetPanel document={document} selected={selected} />

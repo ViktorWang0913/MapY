@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import {
   addNode,
+  clampGridSize,
   cloneDocument,
   createDefaultNode,
   createEmptyDocument,
@@ -102,6 +103,7 @@ interface EditorStore {
   setWorkspaceMode: (mode: WorkspaceMode) => void;
   setConnectionMode: (enabled: boolean) => void;
   setWorldVisibility: (patch: Partial<EditorStore['worldVisibility']>) => void;
+  fitToContent: () => void;
   setConnectionStartDoor: (id?: string) => void;
   selectNode: (id?: string) => void;
   openNodeInspector: (id: string) => void;
@@ -138,6 +140,7 @@ interface EditorStore {
   exportDocument: () => string;
   clearNotice: () => void;
   setSearchQuery: (query: string) => void;
+  setGridSize: (size: number) => void;
   focusNode: (id: string) => void;
   addRegion: () => void;
   updateRegion: (regionId: string, patch: Partial<RegionDefinition>) => void;
@@ -407,8 +410,10 @@ function updateSceneTransformDocument(document: MapYDocument, scene: MapYNode, n
 
   nextDocument = {
     ...nextDocument,
+    // A structure stays a data-child of the scene either way; its own
+    // `scaleWithScene` flag decides if it transforms proportionally on resize.
     structures: nextDocument.structures.map((structure) =>
-      structure.parentSceneId === scene.id
+      structure.parentSceneId === scene.id && structure.scaleWithScene !== false
         ? resizeStructureNode(structure, scaleChildTransform(structure.transform, scaleX, scaleY))
         : structure
     ),
@@ -1364,10 +1369,55 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       history: pushHistory(get().history, state.document),
       notice: '文件已打开。'
     });
+    get().fitToContent();
+  },
+  fitToContent: () => {
+    const state = get();
+    const nodes = getAllNodes(state.document);
+    const { width, height } = state.viewport;
+
+    if (nodes.length === 0) {
+      set({ viewport: { ...state.viewport, x: width / 2, y: height / 2, scale: 1 } });
+      return;
+    }
+
+    const transforms = nodes.map((node) => getObjectAbsoluteTransform(state.document, node));
+    const minX = Math.min(...transforms.map((t) => t.x));
+    const minY = Math.min(...transforms.map((t) => t.y));
+    const maxX = Math.max(...transforms.map((t) => t.x + t.width));
+    const maxY = Math.max(...transforms.map((t) => t.y + t.height));
+
+    const padding = 80;
+    const contentWidth = maxX - minX + padding * 2;
+    const contentHeight = maxY - minY + padding * 2;
+    const scale = Math.min(2, Math.max(0.05, Math.min(width / contentWidth, height / contentHeight)));
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    set({
+      viewport: {
+        ...state.viewport,
+        scale,
+        x: width / 2 - centerX * scale,
+        y: height / 2 - centerY * scale
+      }
+    });
   },
   exportDocument: () => serializeDocument(get().document),
   clearNotice: () => set({ notice: undefined }),
   setSearchQuery: (query) => set({ searchQuery: query }),
+  setGridSize: (size) => {
+    const next = clampGridSize(size);
+    commit(
+      set,
+      get,
+      (document) =>
+        document.settings.gridSize === next
+          ? document
+          : { ...document, settings: { ...document.settings, gridSize: next } },
+      { notice: `最小像素单位已设为 ${next}px` }
+    );
+  },
   focusNode: (id) => {
     const state = get();
     const node = findNode(state.document, id);

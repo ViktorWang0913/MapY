@@ -7,7 +7,7 @@ import {
   nodeMatchesSearch
 } from '../model/document';
 import { getAnchorWorldPoint, getObjectAbsoluteTransform } from '../model/geometry';
-import type { ArtAsset, ElementType, MapYNode, Point, Transform } from '../model/types';
+import type { ArtAsset, ElementType, MapYDocument, MapYNode, Point, Transform } from '../model/types';
 import { saveImageFile } from '../platformFiles';
 import { useEditorStore } from '../store/editorStore';
 import { clearPaletteDrag, getPaletteDrag } from '../utils/paletteDrag';
@@ -245,6 +245,78 @@ function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality?: num
   });
 }
 
+// Draws a legend in the bottom-left of an exported image: identifier types ("类")
+// plus a "连接" (connection) entry when the map has any connections.
+function drawExportLegend(context: CanvasRenderingContext2D, document: MapYDocument, canvasHeight: number): void {
+  const items = document.identifiers.map((definition) => ({
+    color: definition.color,
+    label: definition.kind || definition.name,
+    isConnection: false
+  }));
+  if (document.doors.length > 0) {
+    items.push({ color: '#72d6ff', label: '连接', isConnection: true });
+  }
+  if (items.length === 0) {
+    return;
+  }
+
+  const pad = 14;
+  const rowHeight = 24;
+  const swatch = 14;
+  const titleHeight = 22;
+  const bodyFont = '13px "Inter", "Microsoft YaHei", sans-serif';
+
+  context.save();
+  context.textBaseline = 'middle';
+  context.font = bodyFont;
+  const maxText = items.reduce((max, item) => Math.max(max, context.measureText(item.label).width), 0);
+  const boxWidth = pad * 2 + swatch + 10 + Math.ceil(maxText);
+  const boxHeight = pad * 2 + titleHeight + items.length * rowHeight;
+  const x = 20;
+  const y = canvasHeight - boxHeight - 20;
+
+  context.fillStyle = 'rgba(9,17,30,0.85)';
+  context.fillRect(x, y, boxWidth, boxHeight);
+  context.strokeStyle = '#2f4562';
+  context.lineWidth = 1;
+  context.strokeRect(x + 0.5, y + 0.5, boxWidth, boxHeight);
+
+  context.fillStyle = '#9fd0ff';
+  context.font = 'bold 13px "Inter", "Microsoft YaHei", sans-serif';
+  context.fillText('图例', x + pad, y + pad + 8);
+
+  context.font = bodyFont;
+  items.forEach((item, index) => {
+    const rowY = y + pad + titleHeight + index * rowHeight + rowHeight / 2;
+    const sx = x + pad;
+
+    if (item.isConnection) {
+      context.fillStyle = 'rgba(114,214,255,0.28)';
+      context.fillRect(sx, rowY - swatch / 2, swatch, swatch);
+      context.strokeStyle = item.color;
+      context.strokeRect(sx + 0.5, rowY - swatch / 2 + 0.5, swatch - 1, swatch - 1);
+      context.beginPath();
+      context.moveTo(sx + 2, rowY);
+      context.lineTo(sx + swatch - 2, rowY);
+      context.strokeStyle = '#e7eef8';
+      context.stroke();
+    } else {
+      context.beginPath();
+      context.arc(sx + swatch / 2, rowY, swatch / 2, 0, Math.PI * 2);
+      context.fillStyle = item.color;
+      context.fill();
+      context.lineWidth = 1;
+      context.strokeStyle = '#0b1220';
+      context.stroke();
+    }
+
+    context.fillStyle = '#e7eef8';
+    context.fillText(item.label, sx + swatch + 10, rowY);
+  });
+
+  context.restore();
+}
+
 function getExportBounds(document: ReturnType<typeof useEditorStore.getState>['document'], nodes: MapYNode[]) {
   const targetNodes = nodes.length > 0 ? nodes : document.scenes;
 
@@ -454,7 +526,8 @@ function NodeShape({
   const identifierTypeName = identifierDefinition?.kind || identifierDefinition?.name || '';
   const label = node.type === 'annotation' ? node.text || node.name : worldMode && node.type === 'identifier' ? identifierTypeName || node.name : node.name;
   const identifierSymbol = getInitial(worldMode ? identifierTypeName || node.name || '标' : node.name || identifierTypeName || '标');
-  const showLabel = node.type === 'annotation' || (worldMode && node.type !== 'connection' && node.type !== 'identifier');
+  // Component name labels are hidden on the canvas; annotations still show their text.
+  const showLabel = node.type === 'annotation';
   const commonShapeProps = {
     stroke,
     strokeWidth,
@@ -969,6 +1042,7 @@ export function CanvasWorkspace() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
+  const gridLayerRef = useRef<Konva.Layer | null>(null);
   const nodeRefs = useRef<Record<string, Konva.Group | null>>({});
   const paintingRef = useRef(false);
   const pendingPaintPointRef = useRef<Point | undefined>(undefined);
@@ -1086,6 +1160,11 @@ export function CanvasWorkspace() {
       transformer?.visible(false);
       transformer?.getLayer()?.batchDraw();
 
+      // The grid is an editing aid only — never bake it into the exported image.
+      const gridLayer = gridLayerRef.current;
+      const gridWasVisible = gridLayer?.visible();
+      gridLayer?.visible(false);
+
       try {
         const bounds = getExportBounds(document, renderableNodes);
         const fitScale = Math.min(detail.width / bounds.width, detail.height / bounds.height);
@@ -1115,6 +1194,7 @@ export function CanvasWorkspace() {
         context.fillStyle = '#09111e';
         context.fillRect(0, 0, detail.width, detail.height);
         context.drawImage(image, 0, 0, detail.width, detail.height);
+        drawExportLegend(context, document, detail.height);
         await saveImageFile(await canvasToBlob(canvas, detail.mimeType, 0.92), detail.filename, detail.mimeType);
       } finally {
         stage.width(previousStageState.width);
@@ -1122,6 +1202,7 @@ export function CanvasWorkspace() {
         stage.scale({ x: previousStageState.scaleX, y: previousStageState.scaleY });
         stage.position({ x: previousStageState.x, y: previousStageState.y });
         transformer?.visible(transformerVisible ?? true);
+        gridLayer?.visible(gridWasVisible ?? true);
         stage.batchDraw();
         transformer?.getLayer()?.batchDraw();
       }
@@ -1418,7 +1499,13 @@ export function CanvasWorkspace() {
   }
 
   function handleNodeOpenInspector(node: MapYNode) {
-    if (node.type === 'scene' || node.type === 'structure' || node.type === 'identifier') {
+    if (
+      node.type === 'scene' ||
+      node.type === 'structure' ||
+      node.type === 'identifier' ||
+      node.type === 'connection'
+    ) {
+      // Connections now open the same creation/edit window as the other components.
       openCreation(node.type, node.id);
       return;
     }
@@ -1539,15 +1626,17 @@ export function CanvasWorkspace() {
         x={viewport.x}
         y={viewport.y}
       >
-        <Layer listening={false}>
-          <InfiniteGrid
-            gridSize={document.settings.gridSize}
-            height={viewport.height}
-            tileEditing={tileEditing}
-            viewport={viewport}
-            width={viewport.width}
-          />
-        </Layer>
+        {workspaceMode !== 'world' && (
+          <Layer listening={false} ref={gridLayerRef}>
+            <InfiniteGrid
+              gridSize={document.settings.gridSize}
+              height={viewport.height}
+              tileEditing={tileEditing}
+              viewport={viewport}
+              width={viewport.width}
+            />
+          </Layer>
+        )}
         {workspaceMode === 'world' && <Layer listening={false}>{connectionLines}</Layer>}
         <Layer>
           {renderableNodes.map((node) => {

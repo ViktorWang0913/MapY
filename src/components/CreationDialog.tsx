@@ -11,15 +11,146 @@ import {
   typeLabels
 } from '../model/document';
 import { getParentWorldOrigin } from '../model/geometry';
-import type { ElementType, ShapeKind } from '../model/types';
+import type { DoorSide, ElementType, ShapeKind } from '../model/types';
 import { openAssetFile } from '../platformFiles';
 import { useEditorStore } from '../store/editorStore';
 import { useDraggableWindow } from '../hooks/useDraggableWindow';
 
 const shapeOptions: ShapeKind[] = ['circle', 'diamond', 'triangle', 'star'];
 
+const doorSideLabels: Record<DoorSide, string> = {
+  top: '上',
+  right: '右',
+  bottom: '下',
+  left: '左'
+};
+
 function isCanvasNodeType(type: ElementType): boolean {
   return type === 'scene' || type === 'structure' || type === 'connection';
+}
+
+/**
+ * Editing window for an existing connection — opened by double-click, mirroring
+ * the dialog chrome used for the other components. Edits apply live to the store.
+ */
+function ConnectionEditDialog({ nodeId }: { nodeId: string }) {
+  const document = useEditorStore((state) => state.document);
+  const closeCreation = useEditorStore((state) => state.closeCreation);
+  const updateNode = useEditorStore((state) => state.updateNode);
+  const updateDoorAnchor = useEditorStore((state) => state.updateDoorAnchor);
+  const createConnection = useEditorStore((state) => state.createConnection);
+  const disconnectDoor = useEditorStore((state) => state.disconnectDoor);
+  const selectNode = useEditorStore((state) => state.selectNode);
+  const deleteSelected = useEditorStore((state) => state.deleteSelected);
+  const draggableWindow = useDraggableWindow();
+  const node = findNode(document, nodeId);
+
+  if (!node || node.type !== 'connection') {
+    return null;
+  }
+
+  const parentScene = findNode(document, node.parentSceneId);
+
+  function handleDelete() {
+    selectNode(nodeId);
+    deleteSelected();
+    closeCreation();
+  }
+
+  const dialog = (
+    <div className="dialog-backdrop" role="presentation">
+      <form
+        className="creation-dialog draggable-dialog"
+        data-dragging={draggableWindow.isDragging || undefined}
+        onSubmit={(event) => {
+          event.preventDefault();
+          closeCreation();
+        }}
+        style={draggableWindow.style}
+      >
+        <header className="dialog-header" {...draggableWindow.dragHandleProps}>
+          <div>
+            <span className="dialog-kicker">Canvas 创建菜单</span>
+            <h2>编辑连接</h2>
+          </div>
+          <button className="icon-button" onClick={closeCreation} title="关闭" type="button">
+            <X size={18} />
+          </button>
+        </header>
+
+        <div className="form-grid">
+          <label>
+            名称
+            <input onChange={(event) => updateNode(nodeId, { name: event.target.value })} value={node.name} />
+          </label>
+          <label>
+            颜色
+            <input onChange={(event) => updateNode(nodeId, { color: event.target.value })} type="color" value={node.color} />
+          </label>
+          <label>
+            父地图
+            <input readOnly value={parentScene?.name || '-'} />
+          </label>
+          <label>
+            方向
+            <select
+              onChange={(event) => updateDoorAnchor(nodeId, event.target.value as DoorSide, node.doorOffset || 0)}
+              value={node.doorSide || 'top'}
+            >
+              {Object.entries(doorSideLabels).map(([side, label]) => (
+                <option key={side} value={side}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            偏移
+            <input
+              min={0}
+              onChange={(event) => updateDoorAnchor(nodeId, node.doorSide || 'top', Number(event.target.value))}
+              step={document.settings.gridSize}
+              type="number"
+              value={node.doorOffset || 0}
+            />
+          </label>
+          <label>
+            目标连接
+            <select
+              onChange={(event) => {
+                if (event.target.value) {
+                  createConnection(nodeId, event.target.value);
+                } else {
+                  disconnectDoor(nodeId);
+                }
+              }}
+              value={node.targetDoorId || ''}
+            >
+              <option value="">未连接</option>
+              {document.doors
+                .filter((door) => door.id !== nodeId)
+                .map((door) => (
+                  <option key={door.id} value={door.id}>
+                    {door.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
+
+        <footer className="dialog-actions">
+          <button className="secondary-button" onClick={handleDelete} type="button">
+            删除
+          </button>
+          <button className="primary-button" type="submit">
+            完成
+          </button>
+        </footer>
+      </form>
+    </div>
+  );
+
+  return createPortal(dialog, window.document.body);
 }
 
 export function CreationDialog() {
@@ -110,6 +241,11 @@ export function CreationDialog() {
 
   if (!creationType) {
     return null;
+  }
+
+  // Editing an existing connection uses a dedicated window (same chrome as others).
+  if (creationType === 'connection' && editingNode?.type === 'connection') {
+    return <ConnectionEditDialog nodeId={editingNode.id} />;
   }
 
   const label = typeLabels[creationType];
