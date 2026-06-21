@@ -1,38 +1,21 @@
-import { Box, Eye, EyeOff, GitBranch, Map as MapIcon, Plus, Trash2 } from 'lucide-react';
-import { type ElementType, type IdentifierDefinition } from '../model/types';
+import { Box, ChevronDown, ChevronRight, Eye, EyeOff, GitBranch, Map as MapIcon, Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { typeLabels } from '../model/document';
+import { type ElementType, type IdentifierDefinition, type MapYNode } from '../model/types';
 import { useEditorStore } from '../store/editorStore';
 import { beginPaletteDrag } from '../utils/paletteDrag';
 
-interface PaletteItem {
+interface CreatorItem {
   type: ElementType;
   label: string;
   icon: typeof MapIcon;
-  tone: string;
-  draggable: boolean;
 }
 
-const paletteItems: PaletteItem[] = [
-  {
-    type: 'scene',
-    label: '地图',
-    icon: MapIcon,
-    tone: 'blue',
-    draggable: true
-  },
-  {
-    type: 'structure',
-    label: '结构',
-    icon: Box,
-    tone: 'green',
-    draggable: true
-  },
-  {
-    type: 'connection',
-    label: '连接',
-    icon: GitBranch,
-    tone: 'cyan',
-    draggable: true
-  }
+// Creation entries moved into the "+" menu (Godot-style). Logic unchanged.
+const creatorItems: CreatorItem[] = [
+  { type: 'scene', label: '地图', icon: MapIcon },
+  { type: 'structure', label: '结构', icon: Box },
+  { type: 'connection', label: '连接', icon: GitBranch }
 ];
 
 function dragComponent(event: React.DragEvent, type: ElementType, identifier?: IdentifierDefinition) {
@@ -52,40 +35,163 @@ export function LeftPalette() {
   const document = useEditorStore((state) => state.document);
   const identifiers = document.identifiers;
   const workspaceMode = useEditorStore((state) => state.workspaceMode);
+  const selectedId = useEditorStore((state) => state.selectedId);
+  const selectNode = useEditorStore((state) => state.selectNode);
   const openCreation = useEditorStore((state) => state.openCreation);
+  const openNodeInspector = useEditorStore((state) => state.openNodeInspector);
   const updateIdentifierDefinition = useEditorStore((state) => state.updateIdentifierDefinition);
   const deleteIdentifierDefinition = useEditorStore((state) => state.deleteIdentifierDefinition);
 
+  const [creatorOpen, setCreatorOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+
+  function toggleCollapsed(id: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  // Double-click opens the same editor as the canvas does.
+  function openEditor(node: MapYNode) {
+    if (node.type === 'scene' || node.type === 'structure' || node.type === 'identifier' || node.type === 'connection') {
+      openCreation(node.type, node.id);
+    } else {
+      openNodeInspector(node.id);
+    }
+  }
+
+  function sceneChildren(sceneId: string): MapYNode[] {
+    return [
+      ...document.structures.filter((node) => node.parentSceneId === sceneId),
+      ...document.doors.filter((node) => node.parentSceneId === sceneId),
+      ...document.identifierInstances.filter((node) => node.parentSceneId === sceneId),
+      ...document.annotations.filter((node) => node.parentSceneId === sceneId)
+    ];
+  }
+
+  const sceneIds = new Set(document.scenes.map((scene) => scene.id));
+  const orphanNodes = [
+    ...document.structures,
+    ...document.doors,
+    ...document.identifierInstances,
+    ...document.annotations
+  ].filter((node) => !node.parentSceneId || !sceneIds.has(node.parentSceneId));
+  const hasParts = document.scenes.length > 0 || orphanNodes.length > 0;
+
+  function renderRow(node: MapYNode) {
+    return (
+      <button
+        className={`node-row${selectedId === node.id ? ' active' : ''}`}
+        key={node.id}
+        onClick={() => selectNode(node.id)}
+        onDoubleClick={() => openEditor(node)}
+        title={node.name}
+        type="button"
+      >
+        <span className="node-row-type">{typeLabels[node.type]}</span>
+        <span className="node-row-name">{node.name}</span>
+      </button>
+    );
+  }
+
   return (
     <aside className="left-palette" aria-label="部件栏">
-      <div className="panel-title">
+      <div className="panel-title palette-title">
+        <div className={`palette-add${creatorOpen ? ' open' : ''}`}>
+          <button className="icon-button mini" onClick={() => setCreatorOpen((open) => !open)} title="新建部件" type="button">
+            <Plus size={14} />
+          </button>
+          {creatorOpen && (
+            <div className="palette-add-menu">
+              {creatorItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    className="palette-add-item"
+                    draggable
+                    key={item.type}
+                    onClick={() => {
+                      openCreation(item.type);
+                      setCreatorOpen(false);
+                    }}
+                    onDragStart={(event) => dragComponent(event, item.type)}
+                    title={`新建${item.label}（可拖入画布）`}
+                    type="button"
+                  >
+                    <Icon aria-hidden="true" size={16} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
         <span>部件栏</span>
       </div>
       <div className="palette-main">
         <div className="palette-section-label">部件</div>
-        <div className="palette-list">
-          {paletteItems.map((item) => {
-            const Icon = item.icon;
+        <div className="node-tree">
+          {!hasParts ? (
+            <div className="empty-inline">暂无部件，点击左上角 + 创建</div>
+          ) : (
+            <>
+              {document.scenes.map((scene) => {
+                const children = sceneChildren(scene.id);
+                const isCollapsed = collapsed.has(scene.id);
 
-            return (
-              <button
-                className={`palette-button tone-${item.tone}`}
-                draggable={item.draggable}
-                key={item.type}
-                onClick={() => openCreation(item.type)}
-                onDragStart={(event) => item.draggable && dragComponent(event, item.type)}
-                title={item.label}
-                type="button"
-              >
-                <span className="palette-icon">
-                  <Icon aria-hidden="true" size={20} />
-                </span>
-                <span className="palette-copy">
-                  <strong>{item.label}</strong>
-                </span>
-              </button>
-            );
-          })}
+                return (
+                  <div className="node-tree-group" key={scene.id}>
+                    <div className={`node-row node-row-scene${selectedId === scene.id ? ' active' : ''}`}>
+                      <button
+                        className="node-caret"
+                        onClick={() => toggleCollapsed(scene.id)}
+                        title={isCollapsed ? '展开' : '折叠'}
+                        type="button"
+                      >
+                        {isCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                      </button>
+                      <button
+                        className="node-row-main"
+                        onClick={() => selectNode(scene.id)}
+                        onDoubleClick={() => openEditor(scene)}
+                        title={scene.name}
+                        type="button"
+                      >
+                        <span className="node-row-type">{typeLabels.scene}</span>
+                        <span className="node-row-name">{scene.name}</span>
+                      </button>
+                    </div>
+                    {!isCollapsed && (
+                      <div className="node-tree-children">
+                        {children.length === 0 ? (
+                          <span className="identifier-instance-empty">空</span>
+                        ) : (
+                          children.map((child) => renderRow(child))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {orphanNodes.length > 0 && (
+                <div className="node-tree-group">
+                  <div className="node-row node-row-scene">
+                    <span className="node-caret" />
+                    <span className="node-row-main">
+                      <span className="node-row-name">未归属</span>
+                    </span>
+                  </div>
+                  <div className="node-tree-children">{orphanNodes.map((node) => renderRow(node))}</div>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         <div className="palette-section-label">

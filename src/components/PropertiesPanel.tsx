@@ -1,5 +1,6 @@
 import { MousePointer2, Plus, Trash2 } from 'lucide-react';
-import { findNode, getIdentifierDefinition, MAX_GRID_SIZE, MIN_GRID_SIZE, typeLabels } from '../model/document';
+import { useState } from 'react';
+import { findNode, getIdentifierDefinition, typeLabels } from '../model/document';
 import type { DoorSide, MapYDocument, MapYNode, Transform } from '../model/types';
 import { openAssetFile } from '../platformFiles';
 import { useEditorStore } from '../store/editorStore';
@@ -41,70 +42,6 @@ function RegionPanel({ document }: { document: MapYDocument }) {
           </div>
         ))}
       </div>
-    </section>
-  );
-}
-
-function CanvasSettingsPanel({ document }: { document: MapYDocument }) {
-  const setGridSize = useEditorStore((state) => state.setGridSize);
-
-  return (
-    <section className="property-section">
-      <div className="section-heading">
-        <span>画布</span>
-      </div>
-      <label>
-        最小像素单位 (px)
-        <input
-          max={MAX_GRID_SIZE}
-          min={MIN_GRID_SIZE}
-          onChange={(event) => setGridSize(Number(event.target.value))}
-          step={1}
-          type="number"
-          value={document.settings.gridSize}
-        />
-      </label>
-    </section>
-  );
-}
-
-function StatsPanel({ document }: { document: MapYDocument }) {
-  const regionStats = document.regions
-    .map((region) => ({
-      region,
-      count: document.scenes.filter((scene) => scene.regionId === region.id).length
-    }))
-    .filter((item) => item.count > 0);
-
-  return (
-    <section className="property-section">
-      <div className="section-heading">
-        <span>地图统计</span>
-      </div>
-      <div className="palette-stat-grid">
-        <span>地图</span>
-        <strong>{document.scenes.length}</strong>
-        <span>结构</span>
-        <strong>{document.structures.length}</strong>
-        <span>标识</span>
-        <strong>{document.identifierInstances.length}</strong>
-        <span>连接点</span>
-        <strong>{document.doors.length}</strong>
-        <span>连接线</span>
-        <strong>{document.stitching.edges.length}</strong>
-        <span>资产</span>
-        <strong>{document.assets.length}</strong>
-      </div>
-      {regionStats.length > 0 && (
-        <div className="region-stat-list">
-          {regionStats.map(({ region, count }) => (
-            <span key={region.id}>
-              <i style={{ background: region.color }} />
-              {region.name} {count}
-            </span>
-          ))}
-        </div>
-      )}
     </section>
   );
 }
@@ -228,6 +165,7 @@ export function PropertiesPanel() {
   const selected = findNode(document, selectedId);
   const fallbackRegionId = document.regions[0]?.id;
   const selectedTargetDoor = selected?.type === 'connection' ? findNode(document, selected.targetDoorId) : undefined;
+  const [tab, setTab] = useState<'props' | 'regions'>('props');
 
   return (
     <aside className="properties-panel" aria-label="属性栏">
@@ -235,12 +173,19 @@ export function PropertiesPanel() {
         <span>属性栏</span>
         <em>{selected ? typeLabels[selected.type] : '项目概览'}</em>
       </div>
-      <div className="property-stack compact">
-        <CanvasSettingsPanel document={document} />
-        <RegionPanel document={document} />
-        <StatsPanel document={document} />
+      <div className="property-tabs" role="tablist">
+        <button className={tab === 'props' ? 'active' : ''} onClick={() => setTab('props')} role="tab" type="button">
+          属性
+        </button>
+        <button className={tab === 'regions' ? 'active' : ''} onClick={() => setTab('regions')} role="tab" type="button">
+          区域
+        </button>
       </div>
-      {!selected ? (
+      {tab === 'regions' ? (
+        <div className="property-stack">
+          <RegionPanel document={document} />
+        </div>
+      ) : !selected ? (
         <div className="empty-properties">
           <div className="empty-header">
             <span>

@@ -4,6 +4,8 @@ import { type DragEvent as ReactDragEvent, type KeyboardEvent, useEffect, useMem
 import { Circle, Group, Image as KonvaImage, Layer, Line, Rect, RegularPolygon, Shape, Stage, Text, Transformer } from 'react-konva';
 import {
   getIdentifierDefinition,
+  MAX_GRID_SIZE,
+  MIN_GRID_SIZE,
   nodeMatchesSearch
 } from '../model/document';
 import { getAnchorWorldPoint, getObjectAbsoluteTransform } from '../model/geometry';
@@ -1038,6 +1040,53 @@ function DocumentTabs() {
   );
 }
 
+// "单元" = minimum pixel unit (grid size). Lives in the canvas HUD next to 原点;
+// double-click to edit (same setGridSize + clamp as before).
+function GridUnitControl() {
+  const gridSize = useEditorStore((state) => state.document.settings.gridSize);
+  const setGridSize = useEditorStore((state) => state.setGridSize);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(gridSize));
+
+  function startEditing() {
+    setDraft(String(gridSize));
+    setEditing(true);
+  }
+
+  function commit() {
+    setGridSize(Number(draft));
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        className="hud-unit-input"
+        max={MAX_GRID_SIZE}
+        min={MIN_GRID_SIZE}
+        onBlur={commit}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            commit();
+          } else if (event.key === 'Escape') {
+            setEditing(false);
+          }
+        }}
+        type="number"
+        value={draft}
+      />
+    );
+  }
+
+  return (
+    <button className="hud-unit" onDoubleClick={startEditing} title="单元（最小像素单位）· 双击修改" type="button">
+      单元 {gridSize}
+    </button>
+  );
+}
+
 export function CanvasWorkspace() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -1767,6 +1816,7 @@ export function CanvasWorkspace() {
         >
           原点
         </button>
+        <GridUnitControl />
       </div>
       {workspaceMode === 'world' && <MiniMap document={document} setViewport={setViewport} viewport={viewport} />}
     </section>
