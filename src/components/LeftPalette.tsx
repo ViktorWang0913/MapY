@@ -1,6 +1,6 @@
-import { Box, ChevronDown, ChevronRight, Eye, EyeOff, GitBranch, Map as MapIcon, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
-import { typeLabels } from '../model/document';
+import { Box, ChevronDown, ChevronRight, Diamond, Eye, EyeOff, GitBranch, Map as MapIcon, MessageSquare, Plus, Trash2 } from 'lucide-react';
+import { type CSSProperties, useState } from 'react';
+import { defaultColors } from '../model/document';
 import { type ElementType, type IdentifierDefinition, type MapYNode } from '../model/types';
 import { useEditorStore } from '../store/editorStore';
 import { beginPaletteDrag } from '../utils/paletteDrag';
@@ -11,12 +11,26 @@ interface CreatorItem {
   icon: typeof MapIcon;
 }
 
-// Creation entries moved into the "+" menu (Godot-style). Logic unchanged.
+// "+" creation menu (unchanged): icon + label.
 const creatorItems: CreatorItem[] = [
   { type: 'scene', label: '地图', icon: MapIcon },
   { type: 'structure', label: '结构', icon: Box },
   { type: 'connection', label: '连接', icon: GitBranch }
 ];
+
+// Node-tree row icon — same lucide icon set as the "+" creation menu (Godot-style type icon).
+const TYPE_ICON: Record<ElementType, typeof MapIcon> = {
+  scene: MapIcon,
+  structure: Box,
+  connection: GitBranch,
+  identifier: Diamond,
+  annotation: MessageSquare
+};
+
+function TypeGlyph({ type }: { type: ElementType }) {
+  const Icon = TYPE_ICON[type];
+  return <Icon aria-hidden="true" color={defaultColors[type]} size={16} />;
+}
 
 function dragComponent(event: React.DragEvent, type: ElementType, identifier?: IdentifierDefinition) {
   beginPaletteDrag({
@@ -94,7 +108,9 @@ export function LeftPalette() {
         title={node.name}
         type="button"
       >
-        <span className="node-row-type">{typeLabels[node.type]}</span>
+        <span className="node-row-icon">
+          <TypeGlyph type={node.type} />
+        </span>
         <span className="node-row-name">{node.name}</span>
       </button>
     );
@@ -163,7 +179,9 @@ export function LeftPalette() {
                         title={scene.name}
                         type="button"
                       >
-                        <span className="node-row-type">{typeLabels.scene}</span>
+                        <span className="node-row-icon">
+                          <TypeGlyph type="scene" />
+                        </span>
                         <span className="node-row-name">{scene.name}</span>
                       </button>
                     </div>

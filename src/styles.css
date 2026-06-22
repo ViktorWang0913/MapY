@@ -2275,7 +2275,7 @@ summary.identifier-palette-item::-webkit-details-marker {
 
 .node-row {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-columns: 22px minmax(0, 1fr);
   align-items: center;
   gap: 6px;
   width: 100%;
@@ -2286,6 +2286,12 @@ summary.identifier-palette-item::-webkit-details-marker {
   background: transparent;
   color: #cdddf0;
   text-align: left;
+}
+
+.node-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .node-row:hover {
@@ -2317,7 +2323,7 @@ summary.identifier-palette-item::-webkit-details-marker {
 
 .node-row-main {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-columns: 22px minmax(0, 1fr);
   align-items: center;
   gap: 6px;
   min-height: 24px;
