@@ -1,11 +1,5 @@
 import type { MapYDocument } from '../model/types';
-import type { AiMapPlan, GenerateImageRequest, GenerateImageResponse } from './mapCommands';
-
-const colorByPrompt = (prompt: string) => {
-  let hash = 0;
-  for (const char of prompt) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return `hsl(${hash % 360} 58% 52%)`;
-};
+import type { AiMapPlan } from './mapCommands';
 
 export function mockGenerateMapPlan(message: string, document: MapYDocument): AiMapPlan {
   const text = message.toLowerCase();
@@ -113,16 +107,5 @@ export function mockGenerateMapPlan(message: string, document: MapYDocument): Ai
         transform: { x: 420, y: 40, width: 240, height: 64, rotation: 0 }
       }
     ]
-  };
-}
-
-export function mockGenerateImage(request: GenerateImageRequest): GenerateImageResponse {
-  const background = request.transparentBackground ? 'none' : colorByPrompt(request.prompt);
-  const initials = request.prompt.trim().slice(0, 2).toUpperCase() || 'AI';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${request.width}" height="${request.height}" viewBox="0 0 ${request.width} ${request.height}"><rect width="100%" height="100%" fill="${background}"/><circle cx="50%" cy="50%" r="32%" fill="${colorByPrompt(`${request.prompt}-mark`)}"/><text x="50%" y="54%" text-anchor="middle" font-family="sans-serif" font-size="${Math.round(Math.min(request.width, request.height) * 0.18)}" font-weight="700" fill="white">${initials}</text></svg>`;
-  return {
-    mimeType: 'image/svg+xml',
-    data: btoa(unescape(encodeURIComponent(svg))),
-    revisedPrompt: request.prompt
   };
 }

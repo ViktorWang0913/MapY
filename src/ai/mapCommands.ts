@@ -174,28 +174,6 @@ export interface TextAiConfig {
   timeoutMs: number;
 }
 
-export interface ImageAiConfig {
-  mode: 'mock' | 'api';
-  baseUrl: string;
-  endpoint: string;
-  model: string;
-  apiKey: string;
-  timeoutMs: number;
-}
-
-export interface GenerateImageRequest {
-  prompt: string;
-  width: number;
-  height: number;
-  transparentBackground: boolean;
-}
-
-export interface GenerateImageResponse {
-  mimeType: string;
-  data: string;
-  revisedPrompt?: string;
-}
-
 export function documentToAiContext(document: MapYDocument): AiDocumentContext {
   const counts = {
     scenes: document.scenes.length,

@@ -2394,32 +2394,14 @@ summary.identifier-palette-item::-webkit-details-marker {
   border-bottom: 1px solid #26364b;
 }
 
-.ai-mode-switch {
-  display: grid;
-  flex: 1;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 7px;
-  background: #0a1321;
-}
-
-.ai-mode-switch button {
+.ai-panel-label {
   display: inline-flex;
+  flex: 1;
   align-items: center;
-  justify-content: center;
-  gap: 5px;
-  min-height: 28px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: #8fa6c1;
+  gap: 6px;
+  color: #dce8f8;
   font-size: 12px;
-}
-
-.ai-mode-switch button.active {
-  background: #1d3552;
-  color: #f4f8ff;
+  font-weight: 600;
 }
 
 .ai-workspace,
@@ -2440,9 +2422,7 @@ summary.identifier-palette-item::-webkit-details-marker {
   background: #0b1523;
 }
 
-.ai-settings label,
-.ai-image-workspace label,
-.ai-generated-result label {
+.ai-settings label {
   display: grid;
   gap: 5px;
   color: #8fa6c1;
@@ -2468,9 +2448,6 @@ summary.identifier-palette-item::-webkit-details-marker {
 
 .ai-settings input,
 .ai-settings select,
-.ai-image-workspace textarea,
-.ai-image-workspace select,
-.ai-generated-result select,
 .ai-input-area textarea {
   width: 100%;
   min-height: 32px;
@@ -2484,9 +2461,6 @@ summary.identifier-palette-item::-webkit-details-marker {
 
 .ai-settings input:focus,
 .ai-settings select:focus,
-.ai-image-workspace textarea:focus,
-.ai-image-workspace select:focus,
-.ai-generated-result select:focus,
 .ai-input-area textarea:focus {
   border-color: #4c8bc5;
   outline: 2px solid rgb(76 139 197 / 22%);
@@ -2633,8 +2607,7 @@ summary.identifier-palette-item::-webkit-details-marker {
   white-space: nowrap;
 }
 
-.ai-input-area textarea,
-.ai-image-workspace textarea {
+.ai-input-area textarea {
   resize: vertical;
 }
 
@@ -2736,69 +2709,6 @@ summary.identifier-palette-item::-webkit-details-marker {
   color: #ffc5a8;
 }
 
-.ai-image-placeholder {
-  display: grid;
-  gap: 8px;
-  color: #8fa6c1;
-  font-size: 11px;
-  text-align: center;
-}
-
-.ai-image-skeleton {
-  aspect-ratio: 1;
-  width: 100%;
-  max-height: 230px;
-  border-radius: 7px;
-  background: linear-gradient(90deg, #101d2e 25%, #1a2d44 50%, #101d2e 75%);
-  background-size: 200% 100%;
-  animation: ai-skeleton 1.2s linear infinite;
-}
-
-@keyframes ai-skeleton {
-  to {
-    background-position: -200% 0;
-  }
-}
-
-.ai-generated-result {
-  display: grid;
-  gap: 9px;
-}
-
-.ai-generated-result img {
-  display: block;
-  width: 100%;
-  max-height: 260px;
-  object-fit: contain;
-  border-radius: 7px;
-  background:
-    linear-gradient(45deg, #162437 25%, transparent 25%),
-    linear-gradient(-45deg, #162437 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #162437 75%),
-    linear-gradient(-45deg, transparent 75%, #162437 75%),
-    #0c1624;
-  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
-  background-size: 16px 16px;
-}
-
-.ai-generated-meta {
-  display: grid;
-  gap: 3px;
-}
-
-.ai-generated-meta strong {
-  color: #dce8f8;
-  font-size: 12px;
-}
-
-.ai-generated-meta span {
-  max-height: 48px;
-  overflow: hidden;
-  color: #8fa6c1;
-  font-size: 11px;
-  line-height: 1.45;
-}
-
 .ai-status {
   width: calc(100% - 20px);
   margin: 0 10px 10px;
@@ -2812,8 +2722,7 @@ summary.identifier-palette-item::-webkit-details-marker {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ai-loading span,
-  .ai-image-skeleton {
+  .ai-loading span {
     animation: none;
   }
 }
