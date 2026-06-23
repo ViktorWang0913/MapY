@@ -6,6 +6,9 @@ use std::{sync::Mutex, time::Duration};
 
 const MAX_JSON_BYTES: usize = 2 * 1024 * 1024;
 const MAX_IMAGE_BYTES: usize = 12 * 1024 * 1024;
+const MAX_RETRIES: u32 = 3;
+const BASE_BACKOFF_MS: u64 = 500;
+const MAX_BACKOFF_SECS: u64 = 30;
 
 #[derive(Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
