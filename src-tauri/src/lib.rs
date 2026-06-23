@@ -176,10 +176,7 @@ async fn send_text_chat(
     "max_tokens": max_tokens,
     "stream": false
   });
-  let response = http.post(url)
-    .bearer_auth(&config.api_key)
-    .json(&structured_body)
-    .send().await.map_err(|_| format!("文本 AI 请求失败。地址：{}", url))?;
+  let response = post_json_with_retry(http, url, &config.api_key, &structured_body, "文本 AI").await?;
 
   if response.status().is_success() {
     return limited_json(response, MAX_JSON_BYTES, "AI JSON ").await;
@@ -194,10 +191,7 @@ async fn send_text_chat(
       "max_tokens": max_tokens,
       "stream": false
     });
-    let fallback = http.post(url)
-      .bearer_auth(&config.api_key)
-      .json(&fallback_body)
-      .send().await.map_err(|_| format!("文本 AI 兼容模式请求失败。地址：{}", url))?;
+    let fallback = post_json_with_retry(http, url, &config.api_key, &fallback_body, "文本 AI 兼容模式").await?;
     return limited_json(fallback, MAX_JSON_BYTES, "AI JSON ").await;
   }
 
