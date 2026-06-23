@@ -77,6 +77,48 @@ fn client(timeout_ms: u64) -> Result<Client, String> {
     .map_err(|_| "无法创建 AI 请求客户端。".to_string())
 }
 
+fn is_retryable(status: u16) -> bool {
+  matches!(status, 429 | 500 | 502 | 503 | 504)
+}
+
+fn retry_delay(response: &reqwest::Response, attempt: u32) -> Duration {
+  response
+    .headers()
+    .get(reqwest::header::RETRY_AFTER)
+    .and_then(|value| value.to_str().ok())
+    .and_then(|value| value.trim().parse::<u64>().ok())
+    .map(|secs| Duration::from_secs(secs.min(MAX_BACKOFF_SECS)))
+    .unwrap_or_else(|| Duration::from_millis(BASE_BACKOFF_MS * 2u64.pow(attempt)))
+}
+
+// POST JSON with exponential backoff on rate-limit / transient server errors.
+// Honors a numeric Retry-After header when the provider supplies one.
+async fn post_json_with_retry(
+  http: &Client,
+  url: &str,
+  api_key: &str,
+  body: &Value,
+  label: &str,
+) -> Result<reqwest::Response, String> {
+  let mut attempt = 0;
+  loop {
+    let response = http
+      .post(url)
+      .bearer_auth(api_key)
+      .json(body)
+      .send()
+      .await
+      .map_err(|_| format!("{}请求失败。地址：{}", label, url))?;
+    if is_retryable(response.status().as_u16()) && attempt < MAX_RETRIES {
+      let delay = retry_delay(&response, attempt);
+      attempt += 1;
+      tokio::time::sleep(delay).await;
+      continue;
+    }
+    return Ok(response);
+  }
+}
+
 async fn limited_json(response: reqwest::Response, max_bytes: usize, label: &str) -> Result<Value, String> {
   if !response.status().is_success() {
     let status = response.status();
