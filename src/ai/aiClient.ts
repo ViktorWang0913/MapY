@@ -89,12 +89,7 @@ export async function generateMapPlan(
       ? message.trim().replace(/^\/[^\s]+\s*/, '').trim()
       : message;
   const context = documentToAiContext(document);
-  const systemPrompt = buildMapYPlannerPrompt(
-    naturalRequest,
-    JSON.stringify(context),
-    command,
-    clarification
-  );
+  const systemPrompt = buildMapYPlannerPrompt(naturalRequest, command, clarification);
   if (config.mode === 'mock') {
     await new Promise((resolve) => window.setTimeout(resolve, 350));
     return processAiPlan(
