@@ -76,8 +76,7 @@ Default names:
 ${commandConstraint}
 ${clarificationBlock}
 
-Current document context:
-${documentContext}
+The current document context (existing IDs, names, and counts) is provided as the "documentContext" field of the user message. Never invent IDs that are not present there.
 
 User request:
 ${userInput}`;
