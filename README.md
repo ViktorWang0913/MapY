@@ -6,7 +6,7 @@
 
 Windows：[MapY_0.1.1_x64-setup.exe](download/MapY_0.1.1_x64-setup.exe)（Win10/11 x64，未签名）
 
-![界面示例](download/MapY_UI_example.png)
+![界面示例](download/MapY-ui-2026-06-23T14-46-00-027Z.png)
 
 ## 开发
 
