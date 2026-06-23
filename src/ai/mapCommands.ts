@@ -110,18 +110,49 @@ export interface AiMapPlan {
   operations: AiMapOperation[];
 }
 
+// Per-collection cap for the LLM context. Trimming keeps prompt size (and cost)
+// bounded on large maps; reference resolution still runs against the full
+// document in the repair/validation pipeline, not against this context.
+export const MAX_CONTEXT_ITEMS = 60;
+
+interface AiContextEntry {
+  id: string;
+  name: string;
+}
+
+interface AiSceneContextEntry extends AiContextEntry {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface AiStructureContextEntry extends AiContextEntry {
+  sceneId?: string;
+}
+
+interface AiIdentifierContextEntry extends AiContextEntry {
+  kind?: string;
+}
+
 export interface AiDocumentContext {
   version: number;
   name: string;
   gridSize: number;
-  regions: MapYDocument['regions'];
-  scenes: MapYDocument['scenes'];
-  structures: MapYDocument['structures'];
-  identifiers: MapYDocument['identifiers'];
-  identifierInstances: MapYDocument['identifierInstances'];
-  doors: MapYDocument['doors'];
-  annotations: MapYDocument['annotations'];
-  assets: Array<Pick<MapYDocument['assets'][number], 'id' | 'name' | 'mimeType' | 'width' | 'height'>>;
+  counts: {
+    scenes: number;
+    structures: number;
+    identifiers: number;
+    identifierInstances: number;
+    doors: number;
+    annotations: number;
+  };
+  regions: AiContextEntry[];
+  scenes: AiSceneContextEntry[];
+  structures: AiStructureContextEntry[];
+  identifiers: AiIdentifierContextEntry[];
+  identifierInstances: AiContextEntry[];
+  truncated: boolean;
 }
 
 export interface AiPlanSummary {
