@@ -197,23 +197,51 @@ export interface GenerateImageResponse {
 }
 
 export function documentToAiContext(document: MapYDocument): AiDocumentContext {
+  const counts = {
+    scenes: document.scenes.length,
+    structures: document.structures.length,
+    identifiers: document.identifiers.length,
+    identifierInstances: document.identifierInstances.length,
+    doors: document.doors.length,
+    annotations: document.annotations.length
+  };
+  const truncated =
+    counts.scenes > MAX_CONTEXT_ITEMS ||
+    counts.structures > MAX_CONTEXT_ITEMS ||
+    counts.identifiers > MAX_CONTEXT_ITEMS ||
+    counts.identifierInstances > MAX_CONTEXT_ITEMS;
+
   return {
     version: document.version,
     name: document.name,
     gridSize: document.settings.gridSize,
-    regions: document.regions,
-    scenes: document.scenes,
-    structures: document.structures,
-    identifiers: document.identifiers,
-    identifierInstances: document.identifierInstances,
-    doors: document.doors,
-    annotations: document.annotations,
-    assets: document.assets.map(({ id, name, mimeType, width, height }) => ({
-      id,
-      name,
-      mimeType,
-      width,
-      height
-    }))
+    counts,
+    regions: document.regions.slice(0, MAX_CONTEXT_ITEMS).map((region) => ({
+      id: region.id,
+      name: region.name
+    })),
+    scenes: document.scenes.slice(0, MAX_CONTEXT_ITEMS).map((scene) => ({
+      id: scene.id,
+      name: scene.name,
+      x: scene.transform.x,
+      y: scene.transform.y,
+      width: scene.transform.width,
+      height: scene.transform.height
+    })),
+    structures: document.structures.slice(0, MAX_CONTEXT_ITEMS).map((structure) => ({
+      id: structure.id,
+      name: structure.name,
+      sceneId: structure.parentSceneId
+    })),
+    identifiers: document.identifiers.slice(0, MAX_CONTEXT_ITEMS).map((definition) => ({
+      id: definition.id,
+      name: definition.name,
+      kind: definition.kind
+    })),
+    identifierInstances: document.identifierInstances.slice(0, MAX_CONTEXT_ITEMS).map((instance) => ({
+      id: instance.id,
+      name: instance.name
+    })),
+    truncated
   };
 }
