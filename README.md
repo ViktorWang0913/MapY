@@ -4,9 +4,7 @@
 
 ## 下载
 
-Windows：[MapY_0.1.1_x64-setup.exe](download/MapY_0.1.1_x64-setup.exe)（Win10/11 x64，未签名）
-
-![界面示例](download/MapY-ui-2026-06-23T14-46-00-027Z.png)
+Windows 和 macOS 安装包请从 [GitHub Releases](https://github.com/ViktorWang0913/MapY/releases/latest) 下载。
 
 ## 开发
 
