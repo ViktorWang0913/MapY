@@ -1,73 +1,128 @@
-// ── AI Map Command system: MOCK generator ───────────────────────────────────
-// A deterministic stand-in for a real LLM. Pattern-matches a few phrases so the
-// two required test cases work. Replace via aiClient.generateMapCommand later.
+import type { MapYDocument } from '../model/types';
+import type { AiMapPlan, GenerateImageRequest, GenerateImageResponse } from './mapCommands';
 
-import type { MapObject, MapState, MapYCommand, MapZone } from './mapCommands';
+const colorByPrompt = (prompt: string) => {
+  let hash = 0;
+  for (const char of prompt) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return `hsl(${hash % 360} 58% 52%)`;
+};
 
-function includesAll(text: string, words: string[]): boolean {
-  return words.every((word) => text.includes(word));
-}
+export function mockGenerateMapPlan(message: string, document: MapYDocument): AiMapPlan {
+  const text = message.toLowerCase();
+  const key = document.identifierInstances.find((node) => {
+    const definition = document.identifiers.find((item) => item.id === node.identifierDefinitionId);
+    return `${node.name} ${definition?.name || ''} ${definition?.kind || ''}`.toLowerCase().includes('key') ||
+      `${node.name} ${definition?.name || ''}`.includes('钥匙');
+  });
+  const secondScene = document.scenes[1];
 
-/** Center point of a zone (fallback to map center). */
-function zoneCenter(map: MapState, zoneId: string): { x: number; y: number } {
-  const zone = map.zones.find((z) => z.id === zoneId);
-  if (!zone) return { x: map.width / 2, y: map.height / 2 };
-  return { x: zone.x + zone.width / 2, y: zone.y + zone.height / 2 };
-}
+  if (key && secondScene && (text.includes('move') || text.includes('移动')) && (text.includes('key') || text.includes('钥匙'))) {
+    return {
+      intent: 'patch_document',
+      operations: [{
+        op: 'update_entity',
+        id: key.id,
+        patch: {
+          parentSceneId: secondScene.id,
+          parentStructureId: undefined,
+          transform: { x: secondScene.transform.width / 2, y: secondScene.transform.height / 2 }
+        }
+      }]
+    };
+  }
 
-/** The canonical "city with 2 zones" map from the spec example. */
-function cityMapCommand(): MapYCommand {
-  const zones: MapZone[] = [
-    { id: 'zone_1', name: 'Linear Zone', x: 80, y: 100, width: 450, height: 500, topology: 'linear' },
-    { id: 'zone_2', name: 'S-like Zone', x: 620, y: 100, width: 500, height: 500, topology: 's_like' }
-  ];
-  const objects: MapObject[] = [
-    // Key placed in the linear zone first (keys before bosses).
-    { id: 'key_1', type: 'key', zoneId: 'zone_1', x: 300, y: 300 },
-    // Two bosses in the S-like zone, alternating x to suggest an S progression.
-    { id: 'boss_1', type: 'boss', zoneId: 'zone_2', x: 760, y: 250 },
-    { id: 'boss_2', type: 'boss', zoneId: 'zone_2', x: 980, y: 480 }
-  ];
-  return { type: 'CREATE_MAP', payload: { width: 1200, height: 800, zones, objects } };
-}
-
-/** A minimal default map for unrecognised instructions. */
-function defaultMapCommand(): MapYCommand {
   return {
-    type: 'CREATE_MAP',
-    payload: {
-      width: 1200,
-      height: 800,
-      zones: [{ id: 'zone_1', name: 'Zone 1', x: 100, y: 100, width: 600, height: 600, topology: 'free' }],
-      objects: [{ id: 'item_1', type: 'item', zoneId: 'zone_1', x: 400, y: 400 }]
-    }
+    intent: 'create_document',
+    documentName: 'AI 城市地图',
+    operations: [
+      {
+        op: 'create_scene',
+        tempId: 'scene-linear',
+        name: '线性城区',
+        transform: { x: 80, y: 100, width: 448, height: 496, rotation: 0 },
+        color: '#2d7dd2',
+        opacity: 0.24
+      },
+      {
+        op: 'create_scene',
+        tempId: 'scene-s',
+        name: 'S 型城区',
+        transform: { x: 620, y: 100, width: 500, height: 496, rotation: 0 },
+        color: '#63c7b2',
+        opacity: 0.24
+      },
+      {
+        op: 'create_structure',
+        tempId: 'linear-route',
+        sceneRef: 'scene-linear',
+        name: '线性主路',
+        transform: { x: 128, y: 320, width: 352, height: 32, rotation: 0 },
+        color: '#48a868'
+      },
+      {
+        op: 'create_identifier_definition',
+        tempId: 'key-type',
+        name: '钥匙',
+        kind: 'key',
+        color: '#f3b33f',
+        shape: 'diamond'
+      },
+      {
+        op: 'create_identifier_definition',
+        tempId: 'boss-type',
+        name: 'Boss',
+        kind: 'boss',
+        color: '#e85d75',
+        shape: 'star'
+      },
+      {
+        op: 'place_identifier',
+        tempId: 'key-1',
+        definitionRef: 'key-type',
+        sceneRef: 'scene-linear',
+        name: '钥匙 1',
+        transform: { x: 300, y: 300, width: 16, height: 16, rotation: 0 }
+      },
+      {
+        op: 'place_identifier',
+        tempId: 'boss-1',
+        definitionRef: 'boss-type',
+        sceneRef: 'scene-s',
+        name: 'Boss 1',
+        transform: { x: 760, y: 248, width: 16, height: 16, rotation: 0 }
+      },
+      {
+        op: 'place_identifier',
+        tempId: 'boss-2',
+        definitionRef: 'boss-type',
+        sceneRef: 'scene-s',
+        name: 'Boss 2',
+        transform: { x: 980, y: 480, width: 16, height: 16, rotation: 0 }
+      },
+      {
+        op: 'create_connection',
+        tempId: 'city-link',
+        fromSceneRef: 'scene-linear',
+        toSceneRef: 'scene-s',
+        name: '城区通道'
+      },
+      {
+        op: 'add_annotation',
+        tempId: 'note-1',
+        text: 'AI 生成：线性区域通往 S 型区域。',
+        transform: { x: 420, y: 40, width: 240, height: 64, rotation: 0 }
+      }
+    ]
   };
 }
 
-export function mockGenerateMapCommand(message: string, currentMap: MapState): MapYCommand {
-  const text = message.toLowerCase();
-
-  // Edit case: "Move the key to the second zone."
-  const wantsMoveKey = text.includes('key') && (text.includes('move') || text.includes('移'));
-  const wantsSecondZone =
-    text.includes('second zone') || text.includes('zone 2') || text.includes('zone_2') || text.includes('第二');
-  if (wantsMoveKey && wantsSecondZone) {
-    const key = currentMap.objects.find((object) => object.type === 'key');
-    if (key) {
-      const center = zoneCenter(currentMap, 'zone_2');
-      return { type: 'UPDATE_OBJECT', payload: { id: key.id, patch: { zoneId: 'zone_2', x: center.x, y: center.y } } };
-    }
-  }
-
-  // Generate case: city / 2 zones / linear / S-like.
-  const wantsCity =
-    text.includes('city') ||
-    text.includes('城市') ||
-    includesAll(text, ['2', 'zone']) ||
-    (text.includes('linear') && (text.includes('s-like') || text.includes('s_like') || text.includes('s like')));
-  if (wantsCity) {
-    return cityMapCommand();
-  }
-
-  return defaultMapCommand();
+export function mockGenerateImage(request: GenerateImageRequest): GenerateImageResponse {
+  const background = request.transparentBackground ? 'none' : colorByPrompt(request.prompt);
+  const initials = request.prompt.trim().slice(0, 2).toUpperCase() || 'AI';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${request.width}" height="${request.height}" viewBox="0 0 ${request.width} ${request.height}"><rect width="100%" height="100%" fill="${background}"/><circle cx="50%" cy="50%" r="32%" fill="${colorByPrompt(`${request.prompt}-mark`)}"/><text x="50%" y="54%" text-anchor="middle" font-family="sans-serif" font-size="${Math.round(Math.min(request.width, request.height) * 0.18)}" font-weight="700" fill="white">${initials}</text></svg>`;
+  return {
+    mimeType: 'image/svg+xml',
+    data: btoa(unescape(encodeURIComponent(svg))),
+    revisedPrompt: request.prompt
+  };
 }

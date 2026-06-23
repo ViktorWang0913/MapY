@@ -1,85 +1,142 @@
-// ── AI Map Command system: client (THE SWAP POINT) ──────────────────────────
-// Everything AI-related goes through generateMapCommand(). Today it calls the
-// local mock. To use a real LLM, replace the body with a backend call (see below)
-// — no other file needs to change.
+import { invoke, isTauri } from '@tauri-apps/api/core';
+import type { MapYDocument } from '../model/types';
+import {
+  documentToAiContext,
+  type GenerateImageRequest,
+  type GenerateImageResponse,
+  type ImageAiConfig,
+  type TextAiConfig
+} from './mapCommands';
+import { mockGenerateImage, mockGenerateMapPlan } from './mockAi';
+import { expandSlashCommand, getSlashCommand } from './commandRegistry';
+import { buildMapYPlannerPrompt } from './aiPromptBuilder';
+import { processAiPlan, type AiPlanPipelineResult } from './aiPlanPipeline';
+import type { ClarificationContext } from './aiTypes';
 
-import type { MapState, MapYCommand } from './mapCommands';
-import { mockGenerateMapCommand } from './mockAi';
+const CONFIG_KEY = 'mapy:ai-config:v1';
 
-export interface AiMapResponse {
-  command: MapYCommand;
-  text: string;
+export interface AiConfigState {
+  text: TextAiConfig;
+  image: ImageAiConfig;
 }
 
-/**
- * System prompt for a future real LLM call. Kept here so the backend can import
- * or copy it verbatim. NEVER call an LLM directly from the frontend with an API
- * key — the key must live in a backend environment variable only.
- */
-export const MAP_SYSTEM_PROMPT = `You are MapY's AI map command generator.
-Your task is to convert user natural language instructions into valid MapYCommand JSON.
-You must only output valid JSON.
-Do not output markdown.
-Do not output explanations outside JSON.
-The map is a structured 2D editor state, not an image.
-You must use only the allowed command types:
-CREATE_MAP, ADD_ZONE, ADD_OBJECT, UPDATE_OBJECT, DELETE_OBJECT.
-
-Map design rules:
-- Keep all coordinates inside the canvas.
-- Use simple rectangular zones.
-- For 'linear' topology, arrange objects along a left-to-right or top-to-bottom progression.
-- For 's_like' topology, arrange objects in a curved/S-like progression using alternating x/y positions.
-- Place keys before bosses when possible.
-- Bosses should be placed in later or more difficult areas.
-- Do not invent unsupported object types.
-- Do not invent unsupported command types.
-
-Return JSON in this format:
-{
-  "command": { "type": "...", "payload": { ... } },
-  "text": "short explanation"
-}`;
-
-/** Small artificial delay so the loading state is visible with the mock. */
-const MOCK_LATENCY_MS = 350;
-
-export async function generateMapCommand(message: string, currentMap: MapState): Promise<AiMapResponse> {
-  // ──────────────────────────────────────────────────────────────────────────
-  // MOCK IMPLEMENTATION. To use a real LLM, replace everything below with:
-  //
-  //   const res = await fetch('/api/ai-map-command', {
-  //     method: 'POST',
-  //     headers: { 'Content-Type': 'application/json' },
-  //     body: JSON.stringify({ message, currentMap })
-  //   });
-  //   if (!res.ok) throw new Error('AI 请求失败');
-  //   return (await res.json()) as AiMapResponse; // { command, text }
-  //
-  // The backend (Tauri command or Node route) holds the API key, sends
-  // MAP_SYSTEM_PROMPT + message + currentMap to the provider, and returns
-  // { command, text }. The frontend still validates before applying.
-  // ──────────────────────────────────────────────────────────────────────────
-  await new Promise((resolve) => setTimeout(resolve, MOCK_LATENCY_MS));
-
-  const command = mockGenerateMapCommand(message, currentMap);
-  return { command, text: describeCommand(command) };
-}
-
-/** Short human-readable explanation shown in the chat panel. */
-function describeCommand(command: MapYCommand): string {
-  switch (command.type) {
-    case 'CREATE_MAP':
-      return `已生成新地图：${command.payload.zones.length} 个区域、${command.payload.objects.length} 个对象。`;
-    case 'ADD_ZONE':
-      return `已添加区域：${command.payload.name}。`;
-    case 'ADD_OBJECT':
-      return `已添加对象：${command.payload.type}。`;
-    case 'UPDATE_OBJECT':
-      return `已更新对象 ${command.payload.id}。`;
-    case 'DELETE_OBJECT':
-      return `已删除对象 ${command.payload.id}。`;
-    default:
-      return '已处理指令。';
+const defaults: AiConfigState = {
+  text: {
+    mode: 'mock',
+    baseUrl: '',
+    model: '',
+    apiKey: '',
+    timeoutMs: 60000
+  },
+  image: {
+    mode: 'mock',
+    baseUrl: 'https://api.openai.com/v1',
+    endpoint: '/images/generations',
+    model: 'gpt-image-1',
+    apiKey: '',
+    timeoutMs: 120000
   }
+};
+
+export function isDesktopAiRuntime(): boolean {
+  try {
+    return isTauri();
+  } catch {
+    return false;
+  }
+}
+
+export function loadAiConfig(): AiConfigState {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(CONFIG_KEY) || '{}') as Partial<AiConfigState>;
+    return {
+      text: { ...defaults.text, ...stored.text, apiKey: '' },
+      image: { ...defaults.image, ...stored.image, apiKey: '' }
+    };
+  } catch {
+    return structuredClone(defaults);
+  }
+}
+
+export function saveAiConfig(config: AiConfigState): void {
+  window.localStorage.setItem(CONFIG_KEY, JSON.stringify({
+    text: { ...config.text, apiKey: '' },
+    image: { ...config.image, apiKey: '' }
+  }));
+}
+
+export async function configureAi(config: AiConfigState): Promise<void> {
+  saveAiConfig(config);
+  if (!isDesktopAiRuntime()) return;
+  await Promise.all([
+    invoke('configure_text_ai', { config: config.text }),
+    invoke('configure_image_ai', { config: config.image })
+  ]);
+}
+
+export async function generateMapPlan(
+  message: string,
+  document: MapYDocument,
+  config: TextAiConfig,
+  signal?: AbortSignal,
+  clarification?: ClarificationContext
+): Promise<AiPlanPipelineResult> {
+  const expanded = expandSlashCommand(message);
+  const command = clarification ? getSlashCommand(clarification.originalRequest) : expanded.command;
+  const naturalRequest = clarification
+    ? message
+    : command
+      ? message.trim().replace(/^\/[^\s]+\s*/, '').trim()
+      : message;
+  const context = documentToAiContext(document);
+  const systemPrompt = buildMapYPlannerPrompt(
+    naturalRequest,
+    JSON.stringify(context),
+    command,
+    clarification
+  );
+  if (config.mode === 'mock') {
+    await new Promise((resolve) => window.setTimeout(resolve, 350));
+    return processAiPlan(
+      {
+        plan: mockGenerateMapPlan(expanded.message, document),
+        text: '已生成可预览的地图修改计划。'
+      },
+      document,
+      command
+    );
+  }
+
+  const request = {
+    message: naturalRequest,
+    documentContext: context,
+    systemPrompt
+  };
+  if (isDesktopAiRuntime()) {
+    const rawContent = await invoke<string>('generate_ai_map_plan', { request });
+    return processAiPlan(rawContent, document, command);
+  }
+  throw new Error('浏览器开发模式没有配置 AI 后端代理。请使用 npm run tauri:dev 运行桌面版，或部署同源 /api/ai-map-command 代理。');
+}
+
+export async function generateImage(
+  request: GenerateImageRequest,
+  config: ImageAiConfig,
+  signal?: AbortSignal
+): Promise<GenerateImageResponse> {
+  if (config.mode === 'mock') {
+    await new Promise((resolve) => window.setTimeout(resolve, 450));
+    return mockGenerateImage(request);
+  }
+
+  if (isDesktopAiRuntime()) return invoke<GenerateImageResponse>('generate_ai_image', { request });
+  throw new Error('浏览器开发模式没有配置图片后端代理。请使用 npm run tauri:dev，或部署同源 /api/ai-image 代理。');
+}
+
+export async function testAiConnection(kind: 'text' | 'image'): Promise<void> {
+  if (!isDesktopAiRuntime()) {
+    const endpoint = kind === 'text' ? '/api/ai-map-command' : '/api/ai-image';
+    throw new Error(`浏览器模式不会直接使用 API Key。请通过 npm run tauri:dev 测试桌面 API，或部署 ${endpoint} 代理。`);
+  }
+  await invoke(kind === 'text' ? 'test_text_ai' : 'test_image_ai');
 }

@@ -540,7 +540,10 @@ function normalizeAssets(value: unknown): ArtAsset[] {
       mimeType: String(asset.mimeType),
       width: Number.isFinite(asset.width) ? Number(asset.width) : undefined,
       height: Number.isFinite(asset.height) ? Number(asset.height) : undefined,
-      createdAt: asset.createdAt ? String(asset.createdAt) : undefined
+      createdAt: asset.createdAt ? String(asset.createdAt) : undefined,
+      source: asset.source === 'ai-generated' ? 'ai-generated' : asset.source === 'imported' ? 'imported' : undefined,
+      prompt: asset.prompt ? String(asset.prompt) : undefined,
+      generatedAt: asset.generatedAt ? String(asset.generatedAt) : undefined
     }));
 }
 

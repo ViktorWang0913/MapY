@@ -1,49 +1,93 @@
 import { describe, expect, it } from 'vitest';
-import { executeMapYCommand } from './executeCommand';
-import { createEmptyMap, type MapState } from './mapCommands';
+import { createEmptyDocument } from '../model/document';
+import { previewAiMapPlan } from './executeCommand';
+import type { AiMapPlan } from './mapCommands';
 
-function sampleMap(): MapState {
+function cityPlan(): AiMapPlan {
   return {
-    width: 1200,
-    height: 800,
-    zones: [{ id: 'zone_1', name: 'Z1', x: 0, y: 0, width: 400, height: 400, topology: 'linear' }],
-    objects: [{ id: 'key_1', type: 'key', zoneId: 'zone_1', x: 100, y: 100 }]
+    intent: 'create_document',
+    documentName: '城市',
+    operations: [
+      {
+        op: 'create_scene',
+        tempId: 'scene-a',
+        name: 'A',
+        transform: { x: 0, y: 0, width: 320, height: 200, rotation: 0 }
+      },
+      {
+        op: 'create_scene',
+        tempId: 'scene-b',
+        name: 'B',
+        transform: { x: 400, y: 0, width: 320, height: 200, rotation: 0 }
+      },
+      {
+        op: 'create_identifier_definition',
+        tempId: 'key-type',
+        name: '钥匙',
+        color: '#ffcc00',
+        shape: 'diamond'
+      },
+      {
+        op: 'place_identifier',
+        tempId: 'key',
+        definitionRef: 'key-type',
+        sceneRef: 'scene-a',
+        name: '钥匙 1',
+        transform: { x: 100, y: 100, width: 4, height: 4, rotation: 0 }
+      },
+      {
+        op: 'create_connection',
+        tempId: 'link',
+        fromSceneRef: 'scene-a',
+        toSceneRef: 'scene-b',
+        name: '出口'
+      }
+    ]
   };
 }
 
-describe('executeMapYCommand', () => {
-  it('CREATE_MAP replaces the whole map', () => {
-    const next = executeMapYCommand(
-      { type: 'CREATE_MAP', payload: sampleMap() },
-      createEmptyMap()
-    );
-    expect(next.zones).toHaveLength(1);
-    expect(next.objects[0].id).toBe('key_1');
+describe('previewAiMapPlan', () => {
+  it('builds a complete MapY document without mutating the source', () => {
+    const source = createEmptyDocument('原文档');
+    const snapshot = structuredClone(source);
+    const preview = previewAiMapPlan(cityPlan(), source);
+
+    expect(source).toEqual(snapshot);
+    expect(preview.document.name).toBe('城市');
+    expect(preview.document.scenes).toHaveLength(2);
+    expect(preview.document.identifierInstances).toHaveLength(1);
+    expect(preview.document.doors).toHaveLength(2);
+    expect(preview.document.stitching.edges).toHaveLength(1);
+    expect(preview.summary.created).toContain('钥匙 1');
   });
 
-  it('does not mutate the original state', () => {
-    const original = sampleMap();
-    const snapshot = JSON.stringify(original);
-    executeMapYCommand({ type: 'ADD_OBJECT', payload: { id: 'boss_1', type: 'boss', x: 10, y: 10 } }, original);
-    expect(JSON.stringify(original)).toBe(snapshot);
+  it('updates and deletes existing entities in a patch preview', () => {
+    const created = previewAiMapPlan(cityPlan(), createEmptyDocument()).document;
+    const scene = created.scenes[0];
+    const preview = previewAiMapPlan({
+      intent: 'patch_document',
+      operations: [
+        { op: 'update_entity', id: scene.id, patch: { name: '新名称', transform: { x: 40 } } },
+        { op: 'delete_entity', id: created.identifierInstances[0].id }
+      ]
+    }, created);
+
+    expect(preview.document.scenes[0]).toMatchObject({ name: '新名称', transform: { x: 40 } });
+    expect(preview.document.identifierInstances).toHaveLength(0);
+    expect(preview.summary.updated).toEqual(['A']);
+    expect(preview.summary.deleted).toEqual(['钥匙 1']);
   });
 
-  it('ADD_ZONE and ADD_OBJECT append', () => {
-    let map = sampleMap();
-    map = executeMapYCommand({ type: 'ADD_ZONE', payload: { id: 'zone_2', name: 'Z2', x: 500, y: 0, width: 400, height: 400, topology: 's_like' } }, map);
-    map = executeMapYCommand({ type: 'ADD_OBJECT', payload: { id: 'boss_1', type: 'boss', zoneId: 'zone_2', x: 600, y: 100 } }, map);
-    expect(map.zones).toHaveLength(2);
-    expect(map.objects.map((o) => o.id)).toContain('boss_1');
-  });
-
-  it('UPDATE_OBJECT patches an object by id', () => {
-    const next = executeMapYCommand({ type: 'UPDATE_OBJECT', payload: { id: 'key_1', patch: { zoneId: 'zone_2', x: 700 } } }, sampleMap());
-    expect(next.objects[0].zoneId).toBe('zone_2');
-    expect(next.objects[0].x).toBe(700);
-  });
-
-  it('DELETE_OBJECT removes by id', () => {
-    const next = executeMapYCommand({ type: 'DELETE_OBJECT', payload: { id: 'key_1' } }, sampleMap());
-    expect(next.objects).toHaveLength(0);
+  it('rejects the whole plan when a reference is invalid', () => {
+    expect(() => previewAiMapPlan({
+      intent: 'create_document',
+      operations: [{
+        op: 'create_structure',
+        tempId: 'structure',
+        sceneRef: 'missing',
+        name: '无父级结构',
+        transform: { x: 0, y: 0, width: 32, height: 32, rotation: 0 }
+      }]
+    }, createEmptyDocument())).toThrow('找不到结构所属地图');
   });
 });

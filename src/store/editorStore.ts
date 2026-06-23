@@ -44,6 +44,8 @@ import type {
   Transform,
   WorkspaceMode
 } from '../model/types';
+import type { AiMapPlan, AiPlanPreview } from '../ai/mapCommands';
+import { previewAiMapPlan } from '../ai/executeCommand';
 
 interface Viewport {
   x: number;
@@ -149,6 +151,8 @@ interface EditorStore {
   deleteAsset: (assetId: string) => void;
   setNodeAsset: (nodeId: string, assetId?: string) => void;
   setIdentifierAsset: (identifierId: string, assetId?: string) => void;
+  previewAiPlan: (plan: AiMapPlan) => AiPlanPreview;
+  applyAiPlan: (plan: AiMapPlan, expectedDocument: MapYDocument) => void;
 }
 
 function pushHistory(history: HistoryState, document: MapYDocument): HistoryState {
@@ -1491,7 +1495,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       mimeType: asset.mimeType,
       width: asset.width,
       height: asset.height,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      source: asset.source,
+      prompt: asset.prompt,
+      generatedAt: asset.generatedAt
     };
 
     commit(set, get, (document) => ({
@@ -1537,6 +1544,34 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         identifier.id === identifierId ? { ...identifier, assetId: assetId || undefined } : identifier
       )
     }));
+  },
+  previewAiPlan: (plan) => previewAiMapPlan(plan, get().document),
+  applyAiPlan: (plan, expectedDocument) => {
+    const state = get();
+    if (state.document !== expectedDocument) {
+      throw new Error('地图已在预览后发生变化，请重新生成计划。');
+    }
+
+    const preview = previewAiMapPlan(plan, state.document);
+    if (plan.intent === 'create_document') {
+      const nextTab = createDocumentTab(preview.document);
+      set({
+        document: nextTab.document,
+        documentTabs: [...getSyncedDocumentTabs(state), nextTab],
+        activeDocumentTabId: nextTab.id,
+        selectedId: undefined,
+        inspectorNodeId: undefined,
+        history: { past: [], future: [] },
+        notice: 'AI 地图已创建到新标签页。'
+      });
+      return;
+    }
+
+    commit(set, get, () => preview.document, {
+      selectedId: undefined,
+      inspectorNodeId: undefined,
+      notice: 'AI 修改已应用。'
+    });
   }
 }));
 

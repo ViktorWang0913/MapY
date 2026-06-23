@@ -1,122 +1,98 @@
-// ── AI Map Command system: validation ───────────────────────────────────────
-// Lightweight manual validation (the project does not use Zod). Runs BEFORE a
-// command touches the map; on failure the chat shows the error and nothing applies.
-
-import {
-  COMMAND_TYPES,
-  OBJECT_TYPES,
-  ZONE_TOPOLOGIES,
-  type MapObject,
-  type MapState,
-  type MapYCommand,
-  type MapZone
-} from './mapCommands';
+import { findNode } from '../model/document';
+import type { MapYDocument, ShapeKind, Transform } from '../model/types';
+import type { AiMapOperation, AiMapPlan } from './mapCommands';
 
 export type ValidationResult = { ok: true } | { ok: false; error: string };
+export type PreparedPlanResult = { ok: true; plan: AiMapPlan } | { ok: false; error: string };
 
-const ok: ValidationResult = { ok: true };
-const fail = (error: string): ValidationResult => ({ ok: false, error });
+const shapes: ShapeKind[] = ['rect', 'circle', 'diamond', 'triangle', 'star', 'door', 'note'];
+const fail = (error: string): { ok: false; error: string } => ({ ok: false, error });
 
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
-function isNonEmptyString(value: unknown): value is string {
+function text(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-function validateZone(zone: unknown): string | undefined {
-  const z = zone as Partial<MapZone>;
-  if (!isNonEmptyString(z.id)) return '区域缺少有效的 id。';
-  if (!isNonEmptyString(z.name)) return `区域 ${z.id} 缺少名称。`;
-  if (![z.x, z.y, z.width, z.height].every(isFiniteNumber)) return `区域 ${z.id} 的坐标/尺寸必须是数字。`;
-  if ((z.width as number) <= 0 || (z.height as number) <= 0) return `区域 ${z.id} 的宽高必须为正数。`;
-  if (!ZONE_TOPOLOGIES.includes(z.topology as never)) return `区域 ${z.id} 的 topology 不受支持。`;
+function finite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function transformError(transform: Transform | Partial<Transform> | undefined, partial = false): string | undefined {
+  if (!transform || typeof transform !== 'object') return 'transform 必须是对象。';
+  for (const key of ['x', 'y', 'width', 'height', 'rotation'] as const) {
+    if ((!partial || key in transform) && !finite(transform[key])) return `transform.${key} 必须是数字。`;
+  }
+  if (transform.width !== undefined && transform.width <= 0) return 'transform.width 必须为正数。';
+  if (transform.height !== undefined && transform.height <= 0) return 'transform.height 必须为正数。';
   return undefined;
 }
 
-function validateObject(object: unknown): string | undefined {
-  const o = object as Partial<MapObject>;
-  if (!isNonEmptyString(o.id)) return '对象缺少有效的 id。';
-  if (!OBJECT_TYPES.includes(o.type as never)) return `对象 ${o.id} 的 type 不受支持。`;
-  if (![o.x, o.y].every(isFiniteNumber)) return `对象 ${o.id} 的坐标必须是数字。`;
-  return undefined;
+function operationError(operation: AiMapOperation): string | undefined {
+  switch (operation.op) {
+    case 'create_scene':
+      if (!text(operation.tempId) || !text(operation.name)) return 'create_scene 缺少 ID 或名称。';
+      return transformError(operation.transform);
+    case 'create_structure':
+      if (!text(operation.tempId) || !text(operation.sceneRef) || !text(operation.name)) {
+        return 'create_structure 缺少 ID、场景引用或名称。';
+      }
+      return transformError(operation.transform);
+    case 'create_identifier_definition':
+      if (!text(operation.tempId) || !text(operation.name) || !text(operation.color)) {
+        return '标识类型缺少 ID、名称或颜色。';
+      }
+      return shapes.includes(operation.shape) ? undefined : '标识类型 shape 不受支持。';
+    case 'place_identifier':
+      if (!text(operation.tempId) || !text(operation.definitionRef) ||
+          !text(operation.sceneRef) || !text(operation.name)) {
+        return 'place_identifier 缺少必要引用或名称。';
+      }
+      return transformError(operation.transform);
+    case 'create_connection':
+      if (!text(operation.tempId) || !text(operation.fromSceneRef) || !text(operation.toSceneRef)) {
+        return 'create_connection 缺少必要引用。';
+      }
+      return undefined;
+    case 'add_annotation':
+      if (!text(operation.tempId) || !text(operation.text)) return 'add_annotation 缺少 ID 或内容。';
+      return transformError(operation.transform);
+    case 'update_entity':
+      if (!text(operation.id) || !operation.patch || typeof operation.patch !== 'object') {
+        return 'update_entity 缺少目标或 patch。';
+      }
+      return operation.patch.transform ? transformError(operation.patch.transform, true) : undefined;
+    case 'delete_entity':
+      return text(operation.id) ? undefined : 'delete_entity 缺少目标 ID。';
+  }
+  return '内部 AI 计划包含未知操作。';
 }
 
-/** All ids must be unique across zones AND objects. */
-function findDuplicateId(ids: string[]): string | undefined {
-  const seen = new Set<string>();
-  for (const id of ids) {
-    if (seen.has(id)) return id;
-    seen.add(id);
+export function prepareMapPlan(plan: unknown, document: MapYDocument): PreparedPlanResult {
+  if (!plan || typeof plan !== 'object') return fail('内部 AI 计划不是对象。');
+  const candidate = plan as Partial<AiMapPlan>;
+  if (candidate.intent !== 'create_document' && candidate.intent !== 'patch_document') {
+    return fail('内部 AI 计划 intent 无效。');
   }
-  return undefined;
+  if (!Array.isArray(candidate.operations) || candidate.operations.length === 0) {
+    return fail('内部 AI 计划没有操作。');
+  }
+  if (candidate.operations.length > 200) return fail('单次 AI 计划最多包含 200 个操作。');
+
+  const ids = new Set<string>();
+  for (const operation of candidate.operations) {
+    const error = operationError(operation);
+    if (error) return fail(error);
+    if ('tempId' in operation) {
+      if (ids.has(operation.tempId) || findNode(document, operation.tempId)) {
+        return fail(`重复的临时 ID：${operation.tempId}`);
+      }
+      ids.add(operation.tempId);
+    }
+  }
+
+  return { ok: true, plan: candidate as AiMapPlan };
 }
 
-export function validateCommand(command: unknown, currentMap: MapState): ValidationResult {
-  const cmd = command as Partial<MapYCommand>;
-  if (!cmd || typeof cmd !== 'object' || !COMMAND_TYPES.includes(cmd.type as never)) {
-    return fail('AI 返回了未知的命令类型。');
-  }
-
-  const existingIds = [...currentMap.zones.map((z) => z.id), ...currentMap.objects.map((o) => o.id)];
-
-  switch (cmd.type) {
-    case 'CREATE_MAP': {
-      const map = (cmd as { payload?: Partial<MapState> }).payload;
-      if (!map) return fail('CREATE_MAP 缺少 payload。');
-      if (!isFiniteNumber(map.width) || !isFiniteNumber(map.height)) return fail('地图宽高必须是数字。');
-      if (map.width <= 0 || map.height <= 0) return fail('地图宽高必须为正数。');
-      if (!Array.isArray(map.zones) || !Array.isArray(map.objects)) return fail('地图缺少 zones 或 objects 数组。');
-
-      for (const zone of map.zones) {
-        const error = validateZone(zone);
-        if (error) return fail(error);
-      }
-      for (const object of map.objects) {
-        const error = validateObject(object);
-        if (error) return fail(error);
-      }
-      const dup = findDuplicateId([...map.zones.map((z) => z.id), ...map.objects.map((o) => o.id)]);
-      if (dup) return fail(`存在重复的 id：${dup}`);
-      return ok;
-    }
-
-    case 'ADD_ZONE': {
-      const zone = (cmd as { payload?: unknown }).payload;
-      const error = validateZone(zone);
-      if (error) return fail(error);
-      if (existingIds.includes((zone as MapZone).id)) return fail(`id 已存在：${(zone as MapZone).id}`);
-      return ok;
-    }
-
-    case 'ADD_OBJECT': {
-      const object = (cmd as { payload?: unknown }).payload;
-      const error = validateObject(object);
-      if (error) return fail(error);
-      if (existingIds.includes((object as MapObject).id)) return fail(`id 已存在：${(object as MapObject).id}`);
-      return ok;
-    }
-
-    case 'UPDATE_OBJECT': {
-      const payload = (cmd as { payload?: { id?: string; patch?: Record<string, unknown> } }).payload;
-      if (!payload || !isNonEmptyString(payload.id)) return fail('UPDATE_OBJECT 缺少目标 id。');
-      if (!existingIds.includes(payload.id)) return fail(`找不到要更新的对象：${payload.id}`);
-      if (!payload.patch || typeof payload.patch !== 'object') return fail('UPDATE_OBJECT 缺少 patch。');
-      for (const key of ['x', 'y', 'width', 'height'] as const) {
-        if (key in payload.patch && !isFiniteNumber(payload.patch[key])) return fail(`patch.${key} 必须是数字。`);
-      }
-      return ok;
-    }
-
-    case 'DELETE_OBJECT': {
-      const payload = (cmd as { payload?: { id?: string } }).payload;
-      if (!payload || !isNonEmptyString(payload.id)) return fail('DELETE_OBJECT 缺少目标 id。');
-      if (!existingIds.includes(payload.id)) return fail(`找不到要删除的对象：${payload.id}`);
-      return ok;
-    }
-
-    default:
-      return fail('AI 返回了未知的命令类型。');
-  }
+export function validateMapPlan(plan: unknown, document: MapYDocument): ValidationResult {
+  const result = prepareMapPlan(plan, document);
+  return result.ok ? { ok: true } : result;
 }

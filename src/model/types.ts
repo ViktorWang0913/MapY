@@ -82,6 +82,9 @@ export interface ArtAsset {
   width?: number;
   height?: number;
   createdAt?: string;
+  source?: 'imported' | 'ai-generated';
+  prompt?: string;
+  generatedAt?: string;
 }
 
 export interface MapYDocument {

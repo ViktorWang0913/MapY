@@ -103,4 +103,26 @@ describe('document serialization', () => {
     expect(imported.structures[0].transform).toMatchObject({ x: 32, y: 32, width: 32, height: 32 });
     expect(imported.structures[0].tiles).toHaveLength(64);
   });
+
+  it('round-trips optional AI asset metadata without affecting legacy assets', () => {
+    const document = createEmptyDocument();
+    document.assets.push({
+      id: 'asset-ai',
+      name: 'Boss.webp',
+      dataUrl: 'data:image/webp;base64,AAAA',
+      mimeType: 'image/webp',
+      width: 512,
+      height: 512,
+      source: 'ai-generated',
+      prompt: 'pixel boss',
+      generatedAt: '2026-06-22T00:00:00.000Z'
+    });
+
+    const restored = normalizeDocument(JSON.parse(serializeDocument(document)));
+    expect(restored.assets[0]).toMatchObject({
+      source: 'ai-generated',
+      prompt: 'pixel boss',
+      generatedAt: '2026-06-22T00:00:00.000Z'
+    });
+  });
 });

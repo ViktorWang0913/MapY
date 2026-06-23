@@ -4,6 +4,7 @@ import { findNode, getIdentifierDefinition, typeLabels } from '../model/document
 import type { DoorSide, MapYDocument, MapYNode, Transform } from '../model/types';
 import { openAssetFile } from '../platformFiles';
 import { useEditorStore } from '../store/editorStore';
+import { AiPanel } from './AiPanel';
 
 const doorSideLabels: Record<DoorSide, string> = {
   top: '上',
@@ -165,7 +166,7 @@ export function PropertiesPanel() {
   const selected = findNode(document, selectedId);
   const fallbackRegionId = document.regions[0]?.id;
   const selectedTargetDoor = selected?.type === 'connection' ? findNode(document, selected.targetDoorId) : undefined;
-  const [tab, setTab] = useState<'props' | 'regions'>('props');
+  const [tab, setTab] = useState<'props' | 'regions' | 'ai'>('props');
 
   return (
     <aside className="properties-panel" aria-label="属性栏">
@@ -180,8 +181,13 @@ export function PropertiesPanel() {
         <button className={tab === 'regions' ? 'active' : ''} onClick={() => setTab('regions')} role="tab" type="button">
           区域
         </button>
+        <button className={tab === 'ai' ? 'active' : ''} onClick={() => setTab('ai')} role="tab" type="button">
+          AI
+        </button>
       </div>
-      {tab === 'regions' ? (
+      {tab === 'ai' ? (
+        <AiPanel />
+      ) : tab === 'regions' ? (
         <div className="property-stack">
           <RegionPanel document={document} />
         </div>

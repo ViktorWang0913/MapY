@@ -183,10 +183,19 @@ describe('editor store', () => {
     useEditorStore.getState().setIdentifierAsset(definitionId, asset.id);
     expect(useEditorStore.getState().document.identifiers[0].assetId).toBe(asset.id);
 
+    useEditorStore.getState().createNode('identifier', { x: 64, y: 64 }, {
+      parentSceneId: scene.id,
+      identifierDefinitionId: definitionId
+    });
+    const instance = useEditorStore.getState().document.identifierInstances[0];
+    useEditorStore.getState().setNodeAsset(instance.id, asset.id);
+    expect(useEditorStore.getState().document.identifierInstances[0].assetId).toBe(asset.id);
+
     useEditorStore.getState().deleteAsset(asset.id);
     expect(useEditorStore.getState().document.assets).toEqual([]);
     expect(useEditorStore.getState().document.structures[0].assetId).toBeUndefined();
     expect(useEditorStore.getState().document.identifiers[0].assetId).toBeUndefined();
+    expect(useEditorStore.getState().document.identifierInstances[0].assetId).toBeUndefined();
   });
 
   it('scales child structures when resizing a scene', () => {
@@ -295,5 +304,47 @@ describe('editor store', () => {
       identifiers: true,
       connections: false
     });
+  });
+
+  it('creates AI documents in a new tab without replacing the source tab', () => {
+    const sourceDocument = useEditorStore.getState().document;
+    const plan = {
+      intent: 'create_document' as const,
+      documentName: 'AI 新地图',
+      operations: [{
+        op: 'create_scene' as const,
+        tempId: 'scene',
+        name: 'AI 场景',
+        transform: { x: 0, y: 0, width: 320, height: 200, rotation: 0 }
+      }]
+    };
+
+    const preview = useEditorStore.getState().previewAiPlan(plan);
+    expect(preview.document.scenes).toHaveLength(1);
+    expect(useEditorStore.getState().document).toBe(sourceDocument);
+
+    useEditorStore.getState().applyAiPlan(plan, sourceDocument);
+    expect(useEditorStore.getState().documentTabs).toHaveLength(2);
+    expect(useEditorStore.getState().document.name).toBe('AI 新地图');
+    expect(useEditorStore.getState().documentTabs[0].document).toBe(sourceDocument);
+  });
+
+  it('applies an AI patch as one undo step and rejects stale previews', () => {
+    useEditorStore.getState().createNode('scene', { x: 0, y: 0 }, { name: '原名称' });
+    const sourceDocument = useEditorStore.getState().document;
+    const scene = sourceDocument.scenes[0];
+    const plan = {
+      intent: 'patch_document' as const,
+      operations: [{ op: 'update_entity' as const, id: scene.id, patch: { name: 'AI 名称' } }]
+    };
+
+    useEditorStore.getState().applyAiPlan(plan, sourceDocument);
+    expect(useEditorStore.getState().document.scenes[0].name).toBe('AI 名称');
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().document.scenes[0].name).toBe('原名称');
+
+    const staleDocument = useEditorStore.getState().document;
+    useEditorStore.getState().updateNode(scene.id, { name: '手工修改' });
+    expect(() => useEditorStore.getState().applyAiPlan(plan, staleDocument)).toThrow('发生变化');
   });
 });

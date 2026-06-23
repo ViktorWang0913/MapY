@@ -37,4 +37,29 @@ describe('PropertiesPanel', () => {
 
     expect(useEditorStore.getState().document.scenes[0].name).toBe('Boss 房间');
   });
+
+  it('opens AI as a peer tab beside properties and regions', () => {
+    render(<PropertiesPanel />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'AI' }));
+
+    expect(screen.getByRole('button', { name: '地图' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '图片' })).toBeInTheDocument();
+    expect(screen.queryByText('未选择对象')).not.toBeInTheDocument();
+  });
+
+  it('searches and completes slash commands from the chat input', () => {
+    render(<PropertiesPanel />);
+    fireEvent.click(screen.getByRole('tab', { name: 'AI' }));
+
+    const input = screen.getByLabelText('地图 AI 指令');
+    fireEvent.change(input, { target: { value: '/s' } });
+
+    expect(screen.getByRole('option', { name: /scene/i })).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: 'Tab' });
+    expect(input).toHaveValue('/scene ');
+
+    fireEvent.change(input, { target: { value: '/g' } });
+    expect(screen.getByRole('option', { name: /generate/i })).toBeInTheDocument();
+  });
 });
