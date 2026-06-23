@@ -287,18 +287,22 @@ async fn generate_ai_map_plan(state: tauri::State<'_, AiState>, request: MapPlan
 async fn generate_ai_image(state: tauri::State<'_, AiState>, request: ImageRequest) -> Result<ImageResponse, String> {
   let config = configured_image(&state)?;
   let http = client(config.timeout_ms)?;
-  let response = http
-    .post(join_url(&config.base_url, &config.endpoint))
-    .bearer_auth(&config.api_key)
-    .json(&json!({
-      "model": config.model,
-      "prompt": request.prompt,
-      "size": format!("{}x{}", request.width, request.height),
-      "background": if request.transparent_background { "transparent" } else { "opaque" },
-      "response_format": "b64_json",
-      "n": 1
-    }))
-    .send().await.map_err(|_| "图片 AI 请求失败。".to_string())?;
+  let body = json!({
+    "model": config.model,
+    "prompt": request.prompt,
+    "size": format!("{}x{}", request.width, request.height),
+    "background": if request.transparent_background { "transparent" } else { "opaque" },
+    "response_format": "b64_json",
+    "n": 1
+  });
+  let response = post_json_with_retry(
+    &http,
+    &join_url(&config.base_url, &config.endpoint),
+    &config.api_key,
+    &body,
+    "图片 AI",
+  )
+  .await?;
   let body = limited_json(response, MAX_IMAGE_BYTES * 2, "图片 ").await?;
   let item = body.pointer("/data/0").ok_or_else(|| "图片 AI 响应缺少 data。".to_string())?;
   let revised_prompt = item.get("revised_prompt").and_then(Value::as_str).map(str::to_string);
