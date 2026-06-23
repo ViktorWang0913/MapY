@@ -3,7 +3,6 @@ import type { ClarificationContext } from './aiTypes';
 
 export function buildMapYPlannerPrompt(
   userInput: string,
-  documentContext: string,
   command?: AiSlashCommand,
   clarification?: ClarificationContext
 ): string {
